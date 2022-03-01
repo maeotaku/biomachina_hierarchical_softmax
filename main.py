@@ -1,29 +1,21 @@
-import torch
 import hydra
 from omegaconf import DictConfig
 
-import pandas as pd
-import matplotlib.pyplot as plt
-import numpy as np
 import os
 
-import torch
-from torch import nn
-from torch.nn import functional as F
-from torch.utils.data import DataLoader
-from torch.utils.data import random_split
-from torchvision import transforms
+import hydra
+import pandas as pd
 import pytorch_lightning as pl
+import torch
+from omegaconf import DictConfig
 from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.loggers import WandbLogger
-from models import ResNetSelfSupr, ResNetClassifier
-from engines import SimCLREngine, SuprEngine
-#
-# pd.set_option('display.max_columns', 500)
-# pd.set_option('display.width', 1000)
-# pd.set_option('max_colwidth', -1)
+from torch.utils.data import DataLoader
+from torchvision import transforms
 
 from datasets import PlatCLEFSimCLR, PlantCLEF2022Supr
+from engines import SimCLREngine, SuprEngine
+from models import ResNetSelfSupr, ResNetClassifier
 
 
 def get_engine(cfg, loader, model):
@@ -60,7 +52,8 @@ def get_dataset(original_path, cfg):
                                  transform=transform)
 
 
-@hydra.main(config_path="config", config_name="supr.yaml")
+@hydra.main(config_path="config", config_name="simclr.yaml")
+# @hydra.main(config_path="config", config_name="supr.yaml")
 def run(cfg: DictConfig):
     original_path = hydra.utils.get_original_cwd()
     ds = get_dataset(original_path=original_path, cfg=cfg)

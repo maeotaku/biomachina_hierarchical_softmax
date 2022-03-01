@@ -6,33 +6,48 @@ import torch
 import torch.nn.functional as F
 from torch.cuda.amp import GradScaler, autocast
 from tqdm import tqdm
-from metrics import accuracy
-
+import torchmetrics
 import pytorch_lightning as pl
+from metrics import get_mrr, get_rank
 
 
-class SimCLREngine(pl.LightningModule):
-    
+class ExperimentEngine(pl.LightningModule):
+
     def __init__(self, model, loader, cfg):
         super().__init__()
         self.model = model
         self.cfg = cfg
         self.loader = loader
-        self.criterion = torch.nn.CrossEntropyLoss()
+        self.train_acc = torchmetrics.Accuracy()
+        self.train_precision = torchmetrics.Precision()
 
     def forward(self, x):
         return self.model(x)
-        
-    def configure_optimizers(self):
+    #
+    # def training_epoch_end(self, outputs):
+    #     # this will compute and reset the metric automatically at the epoch end
+    #     self.log('train_epoch_accuracy', self.training_acc)
+    #
+    #     # this will not reset the metric automatically at the epoch end so you
+    #     # need to call it yourself
+    #     mean_precision = self.precision.compute()
+    #     self.log('train_epoch_precision', mean_precision)
+    #     self.precision.reset()
 
+
+class SimCLREngine(ExperimentEngine):
+
+    def __init__(self, model, loader, cfg):
+        super(SimCLREngine, self).__init__(model=model, loader=loader, cfg=cfg)
+        self.criterion = torch.nn.CrossEntropyLoss()
+
+    def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), self.cfg.lr, weight_decay=self.cfg.weight_decay)
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=len(self.loader), eta_min=0,
                                                                last_epoch=-1)
         return [optimizer], [scheduler]
 
-    
     def info_nce_loss(self, features):
-
         labels = torch.cat([torch.arange(self.cfg.dataset.batch_size) for i in range(self.cfg.n_views)], dim=0)
         labels = (labels.unsqueeze(0) == labels.unsqueeze(1)).float()
         labels = labels.to(self.device)
@@ -68,41 +83,34 @@ class SimCLREngine(pl.LightningModule):
         features = self.model(x)
         logits, labels = self.info_nce_loss(features)
         loss = self.criterion(logits, labels)
-        top1, top5 = accuracy(logits, labels, topk=(1, 5))
-        self.log('train_acc_top1', top1[0])
-        self.log('train_acc_top5', top5[0])
+        self.train_acc(logits, labels)
+        self.train_precision(logits, labels)
+        self.log('train_acc', self.train_acc, on_step=True, on_epoch=True)
+        self.log('train_precision', self.train_precision, on_step=True, on_epoch=True)
         self.log("train_loss", loss)
         return loss
 
 
+class SuprEngine(ExperimentEngine):
 
-class SuprEngine(pl.LightningModule):
-    
     def __init__(self, model, loader, cfg):
-        super().__init__()
-        self.model = model
-        self.cfg = cfg
-        self.loader = loader
+        super(SuprEngine, self).__init__(model=model, loader=loader, cfg=cfg)
         self.criterion = torch.nn.CrossEntropyLoss()
 
-    def forward(self, x):
-        return self.model(x)
-        
     def configure_optimizers(self):
-
         optimizer = torch.optim.Adam(self.parameters(), self.cfg.lr, weight_decay=self.cfg.weight_decay)
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=len(self.loader), eta_min=0,
                                                                last_epoch=-1)
         return [optimizer], [scheduler]
 
-
     def training_step(self, train_batch, batch_idx):
         x, labels = train_batch
         logits = self.model(x)
         loss = self.criterion(logits, labels)
-        top1, top5 = accuracy(logits, labels, topk=(1, 5))
-        self.log('train_acc_top1', top1[0])
-        self.log('train_acc_top5', top5[0])
+        self.train_acc(logits, labels)
+        self.train_precision(logits, labels)
+        self.log('train_acc', self.train_acc, on_step=True, on_epoch=True)
+        self.log('train_precision', self.train_precision, on_step=True, on_epoch=True)
         self.log("train_loss", loss)
         return loss
 
@@ -114,6 +122,3 @@ class SuprEngine(pl.LightningModule):
 # # 		x_hat = self.decoder(z)
 # # 		loss = F.mse_loss(x_hat, x)
 # # 		self.log('val_loss', loss)
-
-
-
