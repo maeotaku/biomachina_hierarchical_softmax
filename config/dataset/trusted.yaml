@@ -1,0 +1,7 @@
+name : trusted
+csv : "trusted/PlantCLEF2022_trusted_training_metadata.csv"
+image_root : "trusted\\images"
+label_col : "species"
+filename_col : "image_path"
+batch_size : 56
+resolution : 224

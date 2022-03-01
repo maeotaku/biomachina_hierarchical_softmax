@@ -1,0 +1,7 @@
+name : web
+csv : "web/PlantCLEF2022_web_training_metadata.csv"
+image_root : "web\\images"
+label_col : "species"
+filename_col : "image_path"
+batch_size : 32
+resolution : 224
