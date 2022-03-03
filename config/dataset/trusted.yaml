@@ -5,3 +5,4 @@ label_col : "species"
 filename_col : "image_path"
 batch_size : 56
 resolution : 224
+train_perc : 0.7

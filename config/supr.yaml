@@ -4,6 +4,7 @@ defaults:
   - dataset: trusted
   - model : resnet
 
+chekpoint_point : "checkpoints/simclr-epoch=3-train_loss=1.57-train_acc_top1=0.00.ckpt"
 resolution : 224
 n_views : 2
 epochs : 10

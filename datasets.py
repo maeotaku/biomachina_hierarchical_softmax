@@ -1,6 +1,8 @@
 from torchvision.transforms import transforms
 from gaussian_blur import GaussianBlur
 from torchvision import transforms, datasets
+from collections import Counter
+
 import sys
 import io
 import os
@@ -11,6 +13,8 @@ from torch.utils.data.dataset import Dataset
 import torchvision
 import numpy as np
 from PIL import Image
+from sklearn.model_selection import train_test_split
+
 
 IMG_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.ppm', '.bmp', '.pgm', '.tif']
 
@@ -46,12 +50,23 @@ def is_image_file_from_df(root, filename):
     return is_image_file(os.path.join(root, filename))
 
 def check_file_existence(df, root : str, label_col : str, filename_col : str):
-        df["file_exists"] = df.apply(lambda x : is_image_file_from_df(root, x[filename_col]), axis = 1)
-        df = df[df["file_exists"]==True]
-        return df
+    df["file_exists"] = df.apply(lambda x : is_image_file_from_df(root, x[filename_col]), axis = 1)
+    df = df[df["file_exists"]==True]
+    return df
 
 class PlantCLEF2022_Dataset(Dataset):
     """Defines an abstract class that knows how to consume plantclef 2002 dataset."""
+
+    def split(self, train_perc : float = 0.8):
+        # train_size = int(train_perc * len(self))
+        # test_size = len(self) - train_size
+        # return torch.utils.data.random_split(self, [train_size, test_size])
+        # Split dataset into train and validation
+        train_indices, val_indices = train_test_split(list(range(len(self.targets))), test_size=1.0-train_perc,
+                                                      stratify=self.targets)
+        train_dataset = torch.utils.data.Subset(self, train_indices)
+        val_dataset = torch.utils.data.Subset(self, val_indices)
+        return train_dataset, val_dataset
     
     def generate_classes_dict(self, df, label_col):
         """Generates a list and inverted list of classes and their indexes"""
@@ -65,20 +80,25 @@ class PlantCLEF2022_Dataset(Dataset):
         return self.class_dict[class_text]
     
     def clean_dataset(self, df, root, label_col, filename_col):
-        return check_file_existence(df, root, label_col, filename_col)
+        df = check_file_existence(df, root, label_col, filename_col)
+        return df
     
     def make_samples(self, df, label_col, filename_col):
         """Converts a 2 column dataframe into a list of tuples with the samples"""
+        df['count'] = df.groupby([label_col])[label_col].transform('count')
+        # Drop indexes for count value == 1
+        df = df.drop(df[df['count'] == 1].index)
         return list(df[[filename_col, label_col]].to_records(index=False))
 
     def __init__(self, df, root : str, label_col : str, filename_col : str, loader=default_loader, transform=None):
         self.root = root
         df = self.clean_dataset(df, root, label_col, filename_col)
-        self.generate_classes_dict(df, label_col)
         self.samples = self.make_samples(df, label_col, filename_col)
         if len(self) == 0:
             raise(RuntimeError("Found 0 files in subfolders of: " + root + "\n"
                                "Supported extensions are: " + ",".join(IMG_EXTENSIONS)))
+        self.targets = [ sample[1] for sample in self.samples ]
+        self.generate_classes_dict(df, label_col)
         self.loader = loader
 
         # self.targets = [s[1] for s in self.samples]

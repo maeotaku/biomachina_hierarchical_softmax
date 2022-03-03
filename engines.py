@@ -4,8 +4,6 @@ import sys
 
 import torch
 import torch.nn.functional as F
-from torch.cuda.amp import GradScaler, autocast
-from tqdm import tqdm
 import torchmetrics
 import pytorch_lightning as pl
 from metrics import get_mrr, get_rank
@@ -13,13 +11,17 @@ from metrics import get_mrr, get_rank
 
 class ExperimentEngine(pl.LightningModule):
 
-    def __init__(self, model, loader, cfg):
+    def __init__(self, model, loader, loader_val, cfg):
         super().__init__()
         self.model = model
         self.cfg = cfg
         self.loader = loader
+        self.loader_val = loader_val
         self.train_acc = torchmetrics.Accuracy()
         self.train_precision = torchmetrics.Precision()
+        if loader_val:
+            self.val_acc = torchmetrics.Accuracy()
+            self.val_precision = torchmetrics.Precision()
 
     def forward(self, x):
         return self.model(x)
@@ -37,8 +39,8 @@ class ExperimentEngine(pl.LightningModule):
 
 class SimCLREngine(ExperimentEngine):
 
-    def __init__(self, model, loader, cfg):
-        super(SimCLREngine, self).__init__(model=model, loader=loader, cfg=cfg)
+    def __init__(self, model, loader, loader_val, cfg):
+        super(SimCLREngine, self).__init__(model=model, loader=loader, loader_val=loader_val, cfg=cfg)
         self.criterion = torch.nn.CrossEntropyLoss()
 
     def configure_optimizers(self):
@@ -85,6 +87,8 @@ class SimCLREngine(ExperimentEngine):
         loss = self.criterion(logits, labels)
         self.train_acc(logits, labels)
         self.train_precision(logits, labels)
+        # mrr = torchmetrics.functional.retrieval_reciprocal_rank(logits, labels)
+        # self.log('train_mrr', mrr, on_step=True, on_epoch=True)
         self.log('train_acc', self.train_acc, on_step=True, on_epoch=True)
         self.log('train_precision', self.train_precision, on_step=True, on_epoch=True)
         self.log("train_loss", loss)
@@ -93,9 +97,10 @@ class SimCLREngine(ExperimentEngine):
 
 class SuprEngine(ExperimentEngine):
 
-    def __init__(self, model, loader, cfg):
-        super(SuprEngine, self).__init__(model=model, loader=loader, cfg=cfg)
+    def __init__(self, model, loader, loader_val, cfg):
+        super(SuprEngine, self).__init__(model=model, loader=loader, loader_val=loader_val, cfg=cfg)
         self.criterion = torch.nn.CrossEntropyLoss()
+        self.val_criterion = torch.nn.CrossEntropyLoss()
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), self.cfg.lr, weight_decay=self.cfg.weight_decay)
@@ -109,16 +114,22 @@ class SuprEngine(ExperimentEngine):
         loss = self.criterion(logits, labels)
         self.train_acc(logits, labels)
         self.train_precision(logits, labels)
+        # mrr = torchmetrics.functional.retrieval_reciprocal_rank(logits, labels)
+        # self.log('train_mrr', mrr, on_step=True, on_epoch=True)
         self.log('train_acc', self.train_acc, on_step=True, on_epoch=True)
         self.log('train_precision', self.train_precision, on_step=True, on_epoch=True)
         self.log("train_loss", loss)
         return loss
 
-#     def validation_step(self, val_batch, batch_idx):
-#         pass
-# # 		x, y = val_batch
-# # 		x = x.view(x.size(0), -1)
-# # 		z = self.encoder(x)
-# # 		x_hat = self.decoder(z)
-# # 		loss = F.mse_loss(x_hat, x)
-# # 		self.log('val_loss', loss)
+    def validation_step(self, val_batch, batch_idx):
+        x, labels = val_batch
+        logits = self.model(x)
+        loss = self.val_criterion(logits, labels)
+        self.val_acc(logits, labels)
+        self.val_precision(logits, labels)
+        # mrr = torchmetrics.functional.retrieval_reciprocal_rank(logits, labels)
+        # self.log('train_mrr', mrr, on_step=True, on_epoch=True)
+        self.log('val_acc', self.val_acc, on_step=True, on_epoch=True)
+        self.log('val_precision', self.val_precision, on_step=True, on_epoch=True)
+        self.log("val_loss", loss, on_step=True, on_epoch=True)
+        return loss
