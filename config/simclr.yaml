@@ -4,6 +4,8 @@ defaults:
   - dataset: web
   - model : resnet
 
+pretrained_point : ""
+last_checkpoint : "checkpoints/simclr-epoch=0-train_loss=1.72-train_acc_top1=0.00.ckpt"
 resolution : 224
 n_views : 2
 epochs : 10

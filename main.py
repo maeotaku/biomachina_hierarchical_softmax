@@ -1,6 +1,3 @@
-import hydra
-from omegaconf import DictConfig
-
 import os
 
 import hydra
@@ -28,7 +25,7 @@ def get_model(cfg, original_path, class_size):
     if cfg.model.name == "resnet":
         if cfg.engine.name == "supr":
             saved_model = ResNetSelfSupr(base_model=cfg.model.arch, out_dim=cfg.model.out_dim)
-            _ = SimCLREngine.load_from_checkpoint(os.path.join(original_path, cfg.chekpoint_point),
+            _ = SimCLREngine.load_from_checkpoint(os.path.join(original_path, cfg.pretrained_point),
                                                   model=saved_model, loader=None, loader_val=None, cfg=cfg)
             return ResNetClassifier(saved_model, feature_dim=cfg.model.out_dim, class_dim=class_size)
         else:
@@ -40,9 +37,9 @@ def get_dataset(original_path, cfg):
     df = pd.read_csv(os.path.join(original_path, cfg.dataset.csv), sep=";", usecols=columns)
     if cfg.dataset.name == "web":
         ds = PlatCLEFSimCLR(df, root=os.path.join(original_path, cfg.dataset.image_root),
-                              label_col=cfg.dataset.label_col,
-                              filename_col=cfg.dataset.filename_col,
-                              size=cfg.resolution)
+                            label_col=cfg.dataset.label_col,
+                            filename_col=cfg.dataset.filename_col,
+                            size=cfg.resolution)
         return ds, ds, None
     if cfg.dataset.name == "trusted":
         transform = transforms.Compose([transforms.Resize([cfg.resolution, cfg.resolution]),
@@ -50,8 +47,8 @@ def get_dataset(original_path, cfg):
                                         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
                                         ])
         ds = PlantCLEF2022Supr(df, root=os.path.join(original_path, cfg.dataset.image_root),
-                                 label_col=cfg.dataset.label_col, filename_col=cfg.dataset.filename_col,
-                                 transform=transform)
+                               label_col=cfg.dataset.label_col, filename_col=cfg.dataset.filename_col,
+                               transform=transform)
         dst, dsv = ds.split(train_perc=cfg.dataset.train_perc)
         return ds, dst, dsv
 
@@ -91,10 +88,13 @@ def run(cfg: DictConfig):
     if dsv:
         callbacks.append(EarlyStopping(monitor="val_loss"))
         val_loaders.append(loader_val)
-    trainer = pl.Trainer(gpus=1, num_nodes=1, precision=cfg.precision,
-                         callbacks=callbacks, logger=[tb_logger])
-    trainer.fit(engine, train_dataloader=loader, val_dataloaders=val_loaders)
 
+    trainer = pl.Trainer(gpus=1, num_nodes=1, precision=cfg.precision,
+                             callbacks=callbacks, logger=[tb_logger])
+    if cfg.last_checkpoint:
+        trainer.fit(engine, train_dataloader=loader, val_dataloaders=val_loaders, ckpt_path=os.path.join(original_path, cfg.last_checkpoint))
+    else:
+        trainer.fit(engine, train_dataloader=loader, val_dataloaders=val_loaders)
 
 if __name__ == "__main__":
     run()
