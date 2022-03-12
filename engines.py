@@ -11,7 +11,7 @@ from metrics import get_mrr, get_rank
 
 class ExperimentEngine(pl.LightningModule):
 
-    def __init__(self, model, loader, loader_val, cfg, class_dim):
+    def __init__(self, model, loader, loader_val, cfg):
         super().__init__()
         self.model = model
         self.cfg = cfg
@@ -19,16 +19,6 @@ class ExperimentEngine(pl.LightningModule):
         self.loader_val = loader_val
         self.train_acc = torchmetrics.Accuracy()
         self.train_precision = torchmetrics.Precision()
-        self.train_balanced_acc = torchmetrics.Accuracy('weighted')
-        self.train_auroc = torchmetrics.AUROC(num_classes=class_dim, average='weighted')
-        self.train_average_precision = torchmetrics.AveragePrecision(num_classes=class_dim, average='weighted')
-        self.train_f1 = torchmetrics.F1Score(num_classes=class_dim, average='weighted')
-        self.train_cohen_kappa = torchmetrics.CohenKappa(num_classes=class_dim)
-        self.train_matthews = torchmetrics.MatthewsCorrCoef(num_classes=class_dim)
-
-        if loader_val:
-            self.val_acc = torchmetrics.Accuracy()
-            self.val_precision = torchmetrics.Precision()
 
     def forward(self, x):
         return self.model(x)
@@ -47,7 +37,7 @@ class ExperimentEngine(pl.LightningModule):
 class SimCLREngine(ExperimentEngine):
 
     def __init__(self, model, loader, loader_val, cfg):
-        super(SimCLREngine, self).__init__(model=model, loader=loader, loader_val=loader_val, cfg=cfg, class_dim=None)
+        super(SimCLREngine, self).__init__(model=model, loader=loader, loader_val=loader_val, cfg=cfg)
         self.criterion = torch.nn.CrossEntropyLoss()
 
     def configure_optimizers(self):
@@ -105,9 +95,21 @@ class SimCLREngine(ExperimentEngine):
 class SuprEngine(ExperimentEngine):
 
     def __init__(self, model, loader, loader_val, cfg, class_dim):
-        super(SuprEngine, self).__init__(model=model, loader=loader, loader_val=loader_val, cfg=cfg, class_dim=class_dim)
+        super(SuprEngine, self).__init__(model=model, loader=loader, loader_val=loader_val, cfg=cfg)
+        self.class_dim = class_dim
         self.criterion = torch.nn.CrossEntropyLoss()
         self.val_criterion = torch.nn.CrossEntropyLoss()
+
+        # self.train_balanced_acc = torchmetrics.Accuracy(num_classes=class_dim, average='weighted')
+        # self.train_auroc = torchmetrics.AUROC(num_classes=class_dim, average='weighted')
+        # self.train_average_precision = torchmetrics.AveragePrecision(num_classes=class_dim, average='weighted')
+        # self.train_f1 = torchmetrics.F1Score(num_classes=class_dim, average='weighted')
+        # self.train_cohen_kappa = torchmetrics.CohenKappa(num_classes=class_dim)
+        # self.train_matthews = torchmetrics.MatthewsCorrCoef(num_classes=class_dim)
+
+        if loader_val:
+            self.val_acc = torchmetrics.Accuracy()
+            self.val_precision = torchmetrics.Precision()
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), self.cfg.lr, weight_decay=self.cfg.weight_decay)
@@ -147,16 +149,16 @@ class SuprEngine(ExperimentEngine):
         self.train_logits = torch.zeros(0, dtype=torch.long, device='cuda')
         self.train_labels = torch.zeros(0, dtype=torch.long, device='cuda')
 
-    def on_train_epoch_end(self):
-        self.train_balanced_acc(self.train_logits, self.train_labels)
-        self.train_auroc(self.train_logits, self.train_labels)
-        self.train_average_precision(self.train_logits, self.train_labels)
-        self.train_f1(self.train_logits, self.train_labels)
-        self.train_cohen_kappa(self.train_logits, self.train_labels)
-        self.train_matthews(self.train_logits, self.train_labels)
-        self.log('train_balanced_acc', self.train_balanced_acc, on_step=False, on_epoch=True)
-        self.log('train_auroc', self.train_auroc, on_step=False, on_epoch=True)
-        self.log('train_average_precision', self.train_average_precision, on_step=False, on_epoch=True)
-        self.log('train_f1', self.train_f1, on_step=False, on_epoch=True)
-        self.log('train_cohen_kappa', self.train_cohen_kappa, on_step=False, on_epoch=True)
-        self.log('train_matthews', self.train_matthews, on_step=False, on_epoch=True)
+    # def on_train_epoch_end(self):
+    #     self.train_balanced_acc(self.train_logits, self.train_labels)
+    #     self.train_auroc(self.train_logits, self.train_labels)
+    #     self.train_average_precision(self.train_logits, self.train_labels)
+    #     self.train_f1(self.train_logits, self.train_labels)
+    #     self.train_cohen_kappa(self.train_logits, self.train_labels)
+    #     self.train_matthews(self.train_logits, self.train_labels)
+        # self.log('train_balanced_acc', self.train_balanced_acc, on_step=False, on_epoch=True)
+        # self.log('train_auroc', self.train_auroc, on_step=False, on_epoch=True)
+        # self.log('train_average_precision', self.train_average_precision, on_step=False, on_epoch=True)
+        # self.log('train_f1', self.train_f1, on_step=False, on_epoch=True)
+        # self.log('train_cohen_kappa', self.train_cohen_kappa, on_step=False, on_epoch=True)
+        # self.log('train_matthews', self.train_matthews, on_step=False, on_epoch=True)

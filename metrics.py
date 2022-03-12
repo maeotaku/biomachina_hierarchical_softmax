@@ -15,8 +15,8 @@ def get_rank(dict_value):
 
     return rank_i
 
-def get_balanced_metrics(output, target):
-    #Metrics for imbalanced datasets by sklearn
+def get_balanced_metrics(outputs, target):
+    """Metrics for imbalanced datasets by sklearn."""
     pred = torch.argmax(outputs, dim=1)
     balanced_acc = balanced_accuracy_score(target, pred)
     f1 = f1_score(target, pred, average='weighted')

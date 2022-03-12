@@ -4,8 +4,9 @@ defaults:
   - dataset: trusted
   - model : resnet
 
-pretrained_point : "checkpoints/simclr-epoch=3-train_loss=1.57-train_acc_top1=0.00.ckpt"
-last_checkpoint : ""
+name : "supr"
+pretrained_model_point : "engine=simclr-model=resnet-epoch=8-train_loss=4.10-train_acc=0.17--val_loss=0.00-val_acc=0.00.ckpt"
+last_engine_checkpoint : ""
 resolution : 224
 n_views : 2
 epochs : 10
@@ -17,4 +18,5 @@ temperature : 0.07
 fp16_precision : True
 num_workers : 4
 time_per_epoch : 0.25
-checkpoints : "checkpoints"
+engine_checkpoints : "engine_checkpoints"
+model_checkpoints : "model_checkpoints"
