@@ -73,8 +73,8 @@ def get_dataset(original_path, cfg):
         return ds, dst, dsv
 
 
-@hydra.main(config_path="config", config_name="simclr_vit.yaml")
-# @hydra.main(config_path="config", config_name="supr_resnet.yaml")
+# @hydra.main(config_path="config", config_name="simclr_vit.yaml")
+@hydra.main(config_path="config", config_name="supr_resnet.yaml")
 def run(cfg: DictConfig):
     exp_name = get_exp_name(cfg)
     original_path = hydra.utils.get_original_cwd()
