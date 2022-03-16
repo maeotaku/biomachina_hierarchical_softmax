@@ -19,6 +19,10 @@ class ExperimentEngine(pl.LightningModule):
         self.loader_val = loader_val
         self.train_acc = torchmetrics.Accuracy()
         self.train_precision = torchmetrics.Precision()
+        self.batch_size = loader.batch_size #needed for automatic batch size calculation
+
+    def train_dataloader(self):
+        return self.loader
 
     def forward(self, x):
         return self.model(x)
@@ -41,13 +45,16 @@ class SimCLREngine(ExperimentEngine):
         self.criterion = torch.nn.CrossEntropyLoss()
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), self.cfg.lr, weight_decay=self.cfg.weight_decay)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=len(self.loader), eta_min=0,
-                                                               last_epoch=-1)
+        # optimizer = torch.optim.Adam(self.parameters(), self.cfg.lr, weight_decay=self.cfg.weight_decay)
+        # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=len(self.loader), eta_min=0,
+        #                                                        last_epoch=-1)
+        optimizer = torch.optim.SGD(self.parameters(), self.cfg.lr, momentum=self.cfg.momentum)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer)
+
         return [optimizer], [scheduler]
 
     def info_nce_loss(self, features):
-        labels = torch.cat([torch.arange(self.cfg.dataset.batch_size) for i in range(self.cfg.n_views)], dim=0)
+        labels = torch.cat([torch.arange(self.cfg.batch_size) for i in range(self.cfg.n_views)], dim=0)
         labels = (labels.unsqueeze(0) == labels.unsqueeze(1)).float()
         labels = labels.to(self.device)
 

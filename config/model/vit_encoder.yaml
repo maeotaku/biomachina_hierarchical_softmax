@@ -1,0 +1,10 @@
+name : vit_encoder
+arch : "vit"
+#out_dim : 6400
+patch_size : 32
+dim : 128
+depth : 6
+heads : 16
+dropout : 0.1
+emb_dropout : 0.1
+mlp_dim : 2048

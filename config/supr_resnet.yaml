@@ -1,11 +1,12 @@
-### src/config/simclr.yaml
+### src/config/supr_resnet.yaml
 defaults:
-  - engine: simclr
-  - dataset: web
+  - engine: supr
+  - dataset: trusted
   - model : resnet
 
-name : "simclr"
-pretrained_model_point : ""
+batch_size : 56
+name : "supr"
+pretrained_model_point : "engine=simclr-model=resnet-epoch=8-train_loss=4.10-train_acc=0.17--val_loss=0.00-val_acc=0.00.ckpt"
 last_engine_checkpoint : ""
 resolution : 224
 n_views : 2
