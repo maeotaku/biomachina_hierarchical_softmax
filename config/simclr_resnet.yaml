@@ -1,5 +1,6 @@
 ### src/config/simclr_resnet.yaml
 defaults:
+  - _self_
   - engine: simclr
   - dataset: web
   - model : resnet

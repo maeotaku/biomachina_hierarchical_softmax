@@ -1,5 +1,6 @@
 ### src/config/supr_resnet.yaml
 defaults:
+  - _self_
   - engine: supr
   - dataset: trusted
   - model : resnet
