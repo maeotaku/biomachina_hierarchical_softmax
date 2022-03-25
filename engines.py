@@ -19,7 +19,7 @@ class ExperimentEngine(pl.LightningModule):
         self.loader_val = loader_val
         self.train_acc = torchmetrics.Accuracy()
         self.train_precision = torchmetrics.Precision()
-        self.batch_size = loader.batch_size #needed for automatic batch size calculation
+        self.batch_size = loader.batch_size  # needed for automatic batch size calculation
 
     def train_dataloader(self):
         return self.loader
@@ -45,11 +45,9 @@ class SimCLREngine(ExperimentEngine):
         self.criterion = torch.nn.CrossEntropyLoss()
 
     def configure_optimizers(self):
-        # optimizer = torch.optim.Adam(self.parameters(), self.cfg.lr, weight_decay=self.cfg.weight_decay)
-        # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=len(self.loader), eta_min=0,
-        #                                                        last_epoch=-1)
-        optimizer = torch.optim.SGD(self.parameters(), self.cfg.lr, momentum=self.cfg.momentum)
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer)
+        optimizer = _get_optimizer(name=self.cfg.optimizer, params=self.parameters(), lr=self.cfg.lr,
+                                   weight_decay=self.cfg.weight_decay, momentum=self.cfg.momentum)
+        scheduler = _get_scheduler(name=self.cfg.scheduler, optimizer=optimizer, loader=self.loader)
 
         return [optimizer], [scheduler]
 
@@ -119,9 +117,9 @@ class SuprEngine(ExperimentEngine):
             self.val_precision = torchmetrics.Precision()
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), self.cfg.lr, weight_decay=self.cfg.weight_decay)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=len(self.loader), eta_min=0,
-                                                               last_epoch=-1)
+        optimizer = _get_optimizer(name=self.cfg.optimizer, params=self.parameters(), lr=self.cfg.lr,
+                                   weight_decay=self.cfg.weight_decay, momentum=self.cfg.momentum)
+        scheduler = _get_scheduler(name=self.cfg.scheduler, optimizer=optimizer, loader=self.loader)
         return [optimizer], [scheduler]
 
     def training_step(self, train_batch, batch_idx):
@@ -130,12 +128,12 @@ class SuprEngine(ExperimentEngine):
         loss = self.criterion(logits, labels)
         self.train_acc(logits, labels)
         self.train_precision(logits, labels)
-        
+
         # mrr = torchmetrics.functional.retrieval_reciprocal_rank(logits, labels)
         # self.log('train_mrr', mrr, on_step=True, on_epoch=True)
         self.log('train_acc', self.train_acc, on_step=True, on_epoch=True)
         self.log('train_precision', self.train_precision, on_step=True, on_epoch=True)
-        
+
         self.log("train_loss", loss)
         return loss
 
@@ -163,9 +161,30 @@ class SuprEngine(ExperimentEngine):
     #     self.train_f1(self.train_logits, self.train_labels)
     #     self.train_cohen_kappa(self.train_logits, self.train_labels)
     #     self.train_matthews(self.train_logits, self.train_labels)
-        # self.log('train_balanced_acc', self.train_balanced_acc, on_step=False, on_epoch=True)
-        # self.log('train_auroc', self.train_auroc, on_step=False, on_epoch=True)
-        # self.log('train_average_precision', self.train_average_precision, on_step=False, on_epoch=True)
-        # self.log('train_f1', self.train_f1, on_step=False, on_epoch=True)
-        # self.log('train_cohen_kappa', self.train_cohen_kappa, on_step=False, on_epoch=True)
-        # self.log('train_matthews', self.train_matthews, on_step=False, on_epoch=True)
+    # self.log('train_balanced_acc', self.train_balanced_acc, on_step=False, on_epoch=True)
+    # self.log('train_auroc', self.train_auroc, on_step=False, on_epoch=True)
+    # self.log('train_average_precision', self.train_average_precision, on_step=False, on_epoch=True)
+    # self.log('train_f1', self.train_f1, on_step=False, on_epoch=True)
+    # self.log('train_cohen_kappa', self.train_cohen_kappa, on_step=False, on_epoch=True)
+    # self.log('train_matthews', self.train_matthews, on_step=False, on_epoch=True)
+
+
+def _get_optimizer(name, params, lr, weight_decay, momentum):
+    if name == "Adam":
+        optimizer = torch.optim.Adam(params, lr, weight_decay=weight_decay)
+    elif name == "SGD":
+        optimizer = torch.optim.SGD(params, lr, momentum=momentum)
+    else:
+        raise Exception(f"Invalid optimizer name: ${name}")
+    return optimizer
+
+
+def _get_scheduler(name, optimizer, loader):
+    if name == "CosineAnnealingLR":
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=len(loader), eta_min=0,
+                                                               last_epoch=-1)
+    elif name == "ReduceLROnPlateau":
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer)
+    else:
+        scheduler = None
+    return scheduler
