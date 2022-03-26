@@ -1,6 +1,7 @@
 name : web
-csv : "web/PlantCLEF2022_web_training_metadata.csv"
-image_root : "web\\images"
+path: "web"
+csv : "PlantCLEF2022_web_training_metadata.csv"
+images : "images"
 label_col : "species"
 filename_col : "image_path"
 train_perc : 1.0

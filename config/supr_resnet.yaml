@@ -1,5 +1,6 @@
 ### src/config/supr_resnet.yaml
 defaults:
+  - _self_
   - engine: supr
   - dataset: trusted
   - model : resnet
@@ -11,6 +12,8 @@ last_engine_checkpoint : ""
 resolution : 224
 n_views : 2
 epochs : 10
+optimizer: "Adam"
+scheduler: "CosineAnnealingLR"
 lr : 0.0003
 momentum : 0.9
 weight_decay : 1e-4

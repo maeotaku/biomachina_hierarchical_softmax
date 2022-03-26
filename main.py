@@ -40,8 +40,9 @@ def get_model(cfg, original_path, class_size):
         if cfg.engine.name == "supr":
             saved_model = ResNetSelfSupr(base_model=cfg.model.arch, out_dim=cfg.model.out_dim)
             if cfg.pretrained_model_point != "":
-                _ = SimCLREngine.load_from_checkpoint(os.path.join(original_path, cfg.model_checkpoints, cfg.pretrained_model_point),
-                                                      model=saved_model, loader=None, loader_val=None, cfg=cfg)
+                _ = SimCLREngine.load_from_checkpoint(
+                    os.path.join(original_path, cfg.model_checkpoints, cfg.pretrained_model_point),
+                    model=saved_model, loader=None, loader_val=None, cfg=cfg)
             return ResNetClassifier(saved_model, feature_dim=cfg.model.out_dim, class_dim=class_size)
         else:
             return ResNetSelfSupr(base_model=cfg.model.arch, out_dim=cfg.model.out_dim)
@@ -51,12 +52,26 @@ def get_exp_name(cfg):
     return f"{cfg.name}-engine={cfg.engine.name}-dataset={cfg.dataset.name}-model={cfg.model.name}"
 
 
+def get_full_path(base_path, path):
+    r"""
+        Expands environment variables and user alias (~ tilde), in the case of relative paths it uses the base path
+        to create a full path.
+
+        args:
+            base_path: used in case of path is relative path to expand the path.
+            path: directory to be expanded. i.e data, ./web, ~/data, $HOME, %USER%, /data
+    """
+    eval_path = os.path.expanduser(os.path.expandvars(path))
+    return eval_path if os.path.isabs(eval_path) else os.path.join(base_path, eval_path)
+
+
 def get_dataset(original_path, cfg):
     columns = ["classid", "image_path", "species", "genus", "family"]
-    df = pd.read_csv(os.path.join(original_path, cfg.dataset.csv), sep=";", usecols=columns)
+    ds_root = get_full_path(original_path, cfg.dataset.path)
+    df = pd.read_csv(os.path.join(ds_root, cfg.dataset.csv), sep=";", usecols=columns)
     # df = df.head(n=10000)
     if cfg.dataset.name == "web":
-        ds = PlatCLEFSimCLR(df, root=os.path.join(original_path, cfg.dataset.image_root),
+        ds = PlatCLEFSimCLR(df, root=os.path.join(ds_root, cfg.dataset.images),
                             label_col=cfg.dataset.label_col,
                             filename_col=cfg.dataset.filename_col,
                             size=cfg.resolution)
@@ -66,7 +81,7 @@ def get_dataset(original_path, cfg):
                                         transforms.ToTensor(),
                                         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
                                         ])
-        ds = PlantCLEF2022Supr(df, root=os.path.join(original_path, cfg.dataset.image_root),
+        ds = PlantCLEF2022Supr(df, root=os.path.join(ds_root, cfg.dataset.images),
                                label_col=cfg.dataset.label_col, filename_col=cfg.dataset.filename_col,
                                transform=transform)
         dst, dsv = ds.split(train_perc=cfg.dataset.train_perc)
@@ -124,7 +139,7 @@ def run(cfg: DictConfig):
 
     trainer = pl.Trainer(gpus=1, num_nodes=1, precision=cfg.precision,
                          callbacks=callbacks, logger=[tb_logger])
-    #, accumulate_grad_batches=cfg.accumulate_batches)
+    # , accumulate_grad_batches=cfg.accumulate_batches)
     # trainer.tune(engine)
 
     if cfg.last_engine_checkpoint:
