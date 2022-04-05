@@ -79,7 +79,7 @@ def run(cfg: DictConfig):
     ds, dst, dsv = get_dataset(original_path=original_path, cfg=cfg)
     loader = torch.utils.data.DataLoader(dst, batch_size=cfg.batch_size, shuffle=True, drop_last=True,
                                          num_workers=cfg.num_workers, persistent_workers=True)
-    loader_val = torch.utils.data.DataLoader(dst, batch_size=cfg.batch_size, shuffle=True, drop_last=True,
+    loader_val = torch.utils.data.DataLoader(dsv, batch_size=cfg.batch_size, shuffle=False, drop_last=True,
                                              num_workers=cfg.num_workers, persistent_workers=True) if dsv else None
 
     print(ds)
