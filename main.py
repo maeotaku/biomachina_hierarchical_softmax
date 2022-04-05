@@ -126,10 +126,10 @@ def run(cfg: DictConfig):
     # trainer.tune(engine)
 
     if cfg.last_engine_checkpoint:
-        trainer.fit(engine, train_dataloader=loader, val_dataloaders=val_loaders,
+        trainer.fit(engine, train_dataloaders=loader, val_dataloaders=val_loaders,
                     ckpt_path=os.path.join(original_path, cfg.engine_checkpoints, cfg.last_engine_checkpoint))
     else:
-        trainer.fit(engine, train_dataloader=loader, val_dataloaders=val_loaders)
+        trainer.fit(engine, train_dataloaders=loader, val_dataloaders=val_loaders)
 
 
 if __name__ == "__main__":
