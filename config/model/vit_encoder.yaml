@@ -1,6 +1,6 @@
 name : vit_encoder
 arch : "vit"
-#out_dim : 6400
+image_size : 224
 patch_size : 32
 dim : 128
 depth : 6
