@@ -15,4 +15,4 @@ def efficientnet_b0(pretrained=False,  **kwargs):
         num_classes (int): Number of classes
         last_channel (int): The number of channels on the penultimate layer
     """
-    return models.efficientnet_b0(pretrained=pretrained, progress=True, kwargs=kwargs)
+    return models.efficientnet_b0(pretrained=pretrained, progress=True, **kwargs)
