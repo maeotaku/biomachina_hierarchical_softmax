@@ -4,7 +4,7 @@ import hydra
 import pandas as pd
 import pytorch_lightning as pl
 import torch
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks import EarlyStopping
 from pytorch_lightning.loggers import WandbLogger
@@ -13,7 +13,7 @@ from torchvision import transforms
 
 from datasets import PlatCLEFSimCLR, PlantCLEF2022Supr
 from engines import SimCLREngine, SuprEngine
-from models import ResNetSelfSupr, ResNetClassifier, ViTEncoder
+from models.factory import create_model
 
 
 def get_engine(cfg, loader, loader_val, model, class_dim):
@@ -23,29 +23,12 @@ def get_engine(cfg, loader, loader_val, model, class_dim):
         return SuprEngine(model=model, loader=loader, loader_val=loader_val, cfg=cfg, class_dim=class_dim)
 
 
-def get_model(cfg, original_path, class_size):
-    """This ifs are bad, we need to improve this."""
-    if cfg.model.name == "vit_encoder":
-        return ViTEncoder(
-            image_size=cfg.resolution,
-            patch_size=cfg.model.patch_size,
-            dim=cfg.model.dim,
-            depth=cfg.model.depth,
-            heads=cfg.model.heads,
-            dropout=cfg.model.dropout,
-            emb_dropout=cfg.model.emb_dropout,
-            mlp_dim=cfg.model.mlp_dim,
-            flatten=True)
-    elif cfg.model.name == "resnet":
-        if cfg.engine.name == "supr":
-            saved_model = ResNetSelfSupr(base_model=cfg.model.arch, out_dim=cfg.model.out_dim)
-            if cfg.pretrained_model_point != "":
-                _ = SimCLREngine.load_from_checkpoint(
-                    os.path.join(original_path, cfg.model_checkpoints, cfg.pretrained_model_point),
-                    model=saved_model, loader=None, loader_val=None, cfg=cfg)
-            return ResNetClassifier(saved_model, feature_dim=cfg.model.out_dim, class_dim=class_size)
-        else:
-            return ResNetSelfSupr(base_model=cfg.model.arch, out_dim=cfg.model.out_dim)
+def get_model(cfg, original_path, num_classes):
+    model_cfg = OmegaConf.to_container(cfg.model)
+    model_cfg["num_classes"] = num_classes
+    checkpoint_dir = get_full_path(original_path, cfg.model_checkpoints)
+    model_check_point = os.path.join(checkpoint_dir, cfg.pretrained_model_point)
+    return create_model(model_name=cfg.model.name, checkpoint_path=model_check_point, **model_cfg)
 
 
 def get_exp_name(cfg):
@@ -102,7 +85,7 @@ def run(cfg: DictConfig):
     print(ds)
     print(dst)
     print(dsv)
-    model = get_model(cfg=cfg, original_path=original_path, class_size=ds.class_size)
+    model = get_model(cfg=cfg, original_path=original_path, num_classes=ds.class_size)
     engine = get_engine(cfg=cfg, loader=loader, loader_val=loader_val, model=model, class_dim=ds.class_size)
 
     from pytorch_lightning.callbacks import ModelCheckpoint
