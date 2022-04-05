@@ -112,7 +112,7 @@ def run(cfg: DictConfig):
     )
 
     tb_logger = pl_loggers.TensorBoardLogger(name=exp_name, save_dir=os.path.join(original_path, "logs/"))
-    wandb_logger = WandbLogger()
+    wandb_logger = WandbLogger(name=exp_name, project='biomachina')
 
     callbacks = [model_checkpoint_callback, engine_checkpoint_callback]
     val_loaders = []
