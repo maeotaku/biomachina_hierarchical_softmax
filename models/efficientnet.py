@@ -6,10 +6,11 @@ from .registry import register
 
 
 @register
-def efficientnet_b0(pretrained=False,  **kwargs):
+def efficientnet_b0(pretrained,  **kwargs):
     """
     arguments EfficientNet V1
     Args:
+        pretrained (Boolean): define if want to download the pretrained weights.
         dropout (float): The droupout probability, default 0.2
         stochastic_depth_prob (float): The stochastic depth probability
         num_classes (int): Number of classes

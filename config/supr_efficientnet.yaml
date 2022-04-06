@@ -7,6 +7,7 @@ defaults:
 
 batch_size : 64
 name : "supr_efficientnet"
+pretrained_model : True
 pretrained_model_point : ""
 last_engine_checkpoint : ""
 resolution : 224

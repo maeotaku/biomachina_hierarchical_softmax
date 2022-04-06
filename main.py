@@ -26,9 +26,10 @@ def get_engine(cfg, loader, loader_val, model, class_dim):
 def get_model(cfg, original_path, num_classes):
     model_cfg = OmegaConf.to_container(cfg.model)
     model_cfg["num_classes"] = num_classes
+    pretrained = cfg.pretrained_model
     checkpoint_dir = get_full_path(original_path, cfg.model_checkpoints)
     model_check_point = os.path.join(checkpoint_dir, cfg.pretrained_model_point)
-    return create_model(model_name=cfg.model.name, checkpoint_path=model_check_point, **model_cfg)
+    return create_model(model_name=cfg.model.name, pretrained=pretrained, checkpoint_path=model_check_point, **model_cfg)
 
 
 def get_exp_name(cfg):
@@ -120,8 +121,8 @@ def run(cfg: DictConfig):
         callbacks.append(EarlyStopping(monitor="val_loss"))
         val_loaders.append(loader_val)
 
-    trainer = pl.Trainer(gpus=1, num_nodes=1, precision=cfg.precision,
-                         callbacks=callbacks, logger=[tb_logger])
+    trainer = pl.Trainer(gpus=1, num_nodes=1, precision=cfg.precision, max_epochs=cfg.epochs,
+                         callbacks=callbacks, logger=[wandb_logger])
     # , accumulate_grad_batches=cfg.accumulate_batches)
     # trainer.tune(engine)
 
