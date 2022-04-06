@@ -8,6 +8,7 @@ defaults:
 accumulate_batches : 32
 batch_size : 128
 name : "simclr_vit"
+pretrained_model : False
 pretrained_model_point : ""
 last_engine_checkpoint : ""
 resolution : 224
