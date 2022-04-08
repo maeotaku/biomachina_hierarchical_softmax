@@ -1,12 +1,8 @@
-import logging
-import os
-import sys
-
+import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
 import torchmetrics
-import pytorch_lightning as pl
-from metrics import get_mrr, get_rank
+from  torch.cuda.amp import autocast
 
 
 class ExperimentEngine(pl.LightningModule):
@@ -45,7 +41,8 @@ class SimCLREngine(ExperimentEngine):
         self.criterion = torch.nn.CrossEntropyLoss()
 
     def configure_optimizers(self):
-        optimizer = _get_optimizer(name=self.cfg.optimizer, params=self.parameters(), lr=self.cfg.lr,
+        optimizer = _get_optimizer(name=self.cfg.optimizer,
+                                   params=filter(lambda p: p.requires_grad, self.model.parameters()), lr=self.cfg.lr,
                                    weight_decay=self.cfg.weight_decay, momentum=self.cfg.momentum)
         scheduler = _get_scheduler(name=self.cfg.scheduler, optimizer=optimizer, loader=self.loader)
 
@@ -117,21 +114,25 @@ class SuprEngine(ExperimentEngine):
             self.val_precision = torchmetrics.Precision()
 
     def configure_optimizers(self):
-        optimizer = _get_optimizer(name=self.cfg.optimizer, params=self.parameters(), lr=self.cfg.lr,
+        optimizer = _get_optimizer(name=self.cfg.optimizer,
+                                   params=filter(lambda p: p.requires_grad, self.model.parameters()), lr=self.cfg.lr,
                                    weight_decay=self.cfg.weight_decay, momentum=self.cfg.momentum)
         scheduler = _get_scheduler(name=self.cfg.scheduler, optimizer=optimizer, loader=self.loader)
         return [optimizer], [scheduler]
 
     def training_step(self, train_batch, batch_idx):
         x, labels = train_batch
-        logits = self.model(x)
-        loss = self.criterion(logits, labels)
+        x = x.half()
+        # with autocast():
+        loss, logits = self.model(x, labels)
+        # logits = self.model(x)
+        # loss = self.criterion(logits, labels)
         self.train_acc(logits, labels)
         self.train_precision(logits, labels)
 
         # mrr = torchmetrics.functional.retrieval_reciprocal_rank(logits, labels)
         # self.log('train_mrr', mrr, on_step=True, on_epoch=True)
-        self.log('train_acc', self.train_acc, on_step=True, on_epoch=True)
+        self.log('train_acc', self.train_acc, on_step=True, on_epoch=True,  prog_bar=True)
         self.log('train_precision', self.train_precision, on_step=True, on_epoch=True)
 
         self.log("train_loss", loss)
@@ -139,8 +140,11 @@ class SuprEngine(ExperimentEngine):
 
     def validation_step(self, val_batch, batch_idx):
         x, labels = val_batch
-        logits = self.model(x)
-        loss = self.val_criterion(logits, labels)
+        x = x.half()
+        # with autocast():
+        loss, logits = self.model(x, labels)
+        # logits = self.model(x)
+        # loss = self.criterion(logits, labels)
         self.val_acc(logits, labels)
         self.val_precision(logits, labels)
         # mrr = torchmetrics.functional.retrieval_reciprocal_rank(logits, labels)
@@ -171,7 +175,7 @@ class SuprEngine(ExperimentEngine):
 
 def _get_optimizer(name, params, lr, weight_decay, momentum):
     if name == "Adam":
-        optimizer = torch.optim.Adam(params, lr, weight_decay=weight_decay)
+        optimizer = torch.optim.Adam(params, lr, weight_decay=weight_decay, eps=1e-4)
     elif name == "SGD":
         optimizer = torch.optim.SGD(params, lr, momentum=momentum)
     else:

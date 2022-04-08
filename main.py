@@ -10,6 +10,7 @@ from pytorch_lightning.callbacks import EarlyStopping
 from pytorch_lightning.loggers import WandbLogger
 from torch.utils.data import DataLoader
 from torchvision import transforms
+import pickle
 
 from datasets import PlatCLEFSimCLR, PlantCLEF2022Supr
 from engines import SimCLREngine, SuprEngine
@@ -61,32 +62,41 @@ def get_dataset(original_path, cfg):
                             size=cfg.resolution)
         return ds, ds, None
     if cfg.dataset.name == "trusted":
-        transform = transforms.Compose([transforms.Resize([cfg.resolution, cfg.resolution]),
-                                        transforms.ToTensor(),
-                                        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-                                        ])
-        ds = PlantCLEF2022Supr(df, root=os.path.join(ds_root, cfg.dataset.images),
-                               label_col=cfg.dataset.label_col, filename_col=cfg.dataset.filename_col,
-                               transform=transform)
+        from os.path import exists
+        path = os.path.join(original_path, "trusted_ds_cache.pickle")
+        if exists(path):
+            ds = pickle.load(open(path, "rb"))
+            print("Dataset cache loaded.")
+        else:
+            transform = transforms.Compose([transforms.Resize([cfg.resolution, cfg.resolution]),
+                                            transforms.ToTensor(),
+                                            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                                            ])
+            ds = PlantCLEF2022Supr(df, root=os.path.join(ds_root, cfg.dataset.images),
+                                   label_col=cfg.dataset.label_col, filename_col=cfg.dataset.filename_col,
+                                   transform=transform)
+            pickle.dump(ds, open(path, "wb"))
         dst, dsv = ds.split(train_perc=cfg.dataset.train_perc)
         return ds, dst, dsv
 
 
 # @hydra.main(config_path="config", config_name="simclr_vit.yaml")
-@hydra.main(config_path="config", config_name="supr_resnet.yaml")
+@hydra.main(config_path="config", config_name="supr_hresnet.yaml")
+# @hydra.main(config_path="config", config_name="supr_vitae.yaml")
 def run(cfg: DictConfig):
     exp_name = get_exp_name(cfg)
     original_path = hydra.utils.get_original_cwd()
     ds, dst, dsv = get_dataset(original_path=original_path, cfg=cfg)
     loader = torch.utils.data.DataLoader(dst, batch_size=cfg.batch_size, shuffle=True, drop_last=True,
-                                         num_workers=cfg.num_workers, persistent_workers=True)
+                                         num_workers=cfg.num_workers, persistent_workers=True, pin_memory=True)
     loader_val = torch.utils.data.DataLoader(dsv, batch_size=cfg.batch_size, shuffle=False, drop_last=True,
-                                             num_workers=cfg.num_workers, persistent_workers=True) if dsv else None
+                                             num_workers=cfg.num_workers, persistent_workers=True, pin_memory=True) if dsv else None
 
     print(ds)
     print(dst)
     print(dsv)
     model = get_model(cfg=cfg, original_path=original_path, num_classes=ds.class_size)
+    # model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
     engine = get_engine(cfg=cfg, loader=loader, loader_val=loader_val, model=model, class_dim=ds.class_size)
 
     from pytorch_lightning.callbacks import ModelCheckpoint
@@ -94,7 +104,7 @@ def run(cfg: DictConfig):
     engine_checkpoint_callback = ModelCheckpoint(
         monitor="train_loss",
         dirpath=os.path.join(original_path, cfg.engine_checkpoints),
-        save_top_k=2,
+        save_top_k=1,
         mode="min",
         filename=f"{exp_name}" + "-{epoch}-{train_loss:.2f}-{train_acc:.2f}--{val_loss:.2f}-{val_acc:.2f}",
         save_on_train_epoch_end=True,
@@ -104,7 +114,7 @@ def run(cfg: DictConfig):
     model_checkpoint_callback = ModelCheckpoint(
         monitor="train_loss",
         dirpath=os.path.join(original_path, cfg.model_checkpoints),
-        save_top_k=2,
+        save_top_k=1,
         mode="min",
         filename=f"{exp_name}" + "-{epoch}-{train_loss:.2f}-{train_acc:.2f}--{val_loss:.2f}-{val_acc:.2f}",
         save_on_train_epoch_end=True,
@@ -113,7 +123,7 @@ def run(cfg: DictConfig):
     )
 
     tb_logger = pl_loggers.TensorBoardLogger(name=exp_name, save_dir=os.path.join(original_path, "logs/"))
-    wandb_logger = WandbLogger(name=exp_name, project='biomachina')
+    # wandb_logger = WandbLogger(name=exp_name, project='biomachina')
 
     callbacks = [model_checkpoint_callback, engine_checkpoint_callback]
     val_loaders = []
@@ -122,7 +132,7 @@ def run(cfg: DictConfig):
         val_loaders.append(loader_val)
 
     trainer = pl.Trainer(gpus=1, num_nodes=1, precision=cfg.precision, max_epochs=cfg.epochs,
-                         callbacks=callbacks, logger=[wandb_logger])
+                         callbacks=callbacks, logger=[tb_logger], limit_train_batches=1.0, gradient_clip_val=0.5, amp_backend="native")
     # , accumulate_grad_batches=cfg.accumulate_batches)
     # trainer.tune(engine)
 

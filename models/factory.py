@@ -28,5 +28,4 @@ def create_model(
 
     if os.path.isfile(checkpoint_path):
         model.load_checkpoint(model, checkpoint_path)
-
     return model

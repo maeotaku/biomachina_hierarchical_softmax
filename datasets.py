@@ -1,6 +1,9 @@
+import pandas as pd
 from torchvision.transforms import transforms
 from gaussian_blur import GaussianBlur
 from torchvision import transforms, datasets
+from tqdm import tqdm
+tqdm.pandas()
 from collections import Counter
 
 import sys
@@ -18,8 +21,19 @@ from sklearn.model_selection import train_test_split
 
 IMG_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.ppm', '.bmp', '.pgm', '.tif']
 
+def is_valid(filename):
+    img = Image.open(filename)
+    try:
+        img.verify()
+        return True
+    except Exception:
+        return False
+
+def has_bytes(filename):
+    return os.stat(filename).st_size > 0
+
 def is_image_file(filename):
-    return has_file_allowed_extension(filename, IMG_EXTENSIONS) and os.path.isfile(filename)
+    return has_file_allowed_extension(filename, IMG_EXTENSIONS) and os.path.isfile(filename) and has_bytes(filename) #and is_valid(filename)
 
 def pil_loader(path):
     # open path as file to avoid ResourceWarning (https://github.com/python-pillow/Pillow/issues/835)
@@ -49,8 +63,8 @@ def default_loader(path):
 def is_image_file_from_df(root, filename):
     return is_image_file(os.path.join(root, filename))
 
-def check_file_existence(df, root : str, label_col : str, filename_col : str):
-    df["file_exists"] = df.apply(lambda x : is_image_file_from_df(root, x[filename_col]), axis = 1)
+def check_file_existence(df : pd.DataFrame, root : str, label_col : str, filename_col : str):
+    df["file_exists"] = df.progress_apply(lambda x : is_image_file_from_df(root, x[filename_col]), axis = 1)
     df = df[df["file_exists"]==True]
     return df
 
@@ -88,12 +102,15 @@ class PlantCLEF2022_Dataset(Dataset):
         df['count'] = df.groupby([label_col])[label_col].transform('count')
         # Drop indexes for count value == 1
         df = df.drop(df[df['count'] == 1].index)
-        return list(df[[filename_col, label_col]].to_records(index=False))
+        return list(df[[filename_col, label_col]].to_records(index=False)), df
 
     def __init__(self, df, root : str, label_col : str, filename_col : str, loader=default_loader, transform=None):
         self.root = root
+        self.label_col = label_col
+        print("Cleaning dataset...")
         df = self.clean_dataset(df, root, label_col, filename_col)
-        self.samples = self.make_samples(df, label_col, filename_col)
+        print("Making samples....")
+        self.samples, self.df = self.make_samples(df, label_col, filename_col)
         if len(self) == 0:
             raise(RuntimeError("Found 0 files in subfolders of: " + root + "\n"
                                "Supported extensions are: " + ",".join(IMG_EXTENSIONS)))
@@ -118,6 +135,8 @@ class PlantCLEF2022_Dataset(Dataset):
         fmt_str += '    Root Location: {}\n'.format(self.root)
         tmp = '    Transforms (if any): '
         fmt_str += '{0}{1}\n'.format(tmp, self.transform_x.__repr__().replace('\n', '\n' + ' ' * len(tmp)))
+        fmt_str += f'Label: {self.label_col} - {self.class_size}'
+        fmt_str += f'Size: {self.df.shape}'
         # tmp = '    Target Transforms (if any): '
         # fmt_str += '{0}{1}'.format(tmp, self.target_transform.__repr__().replace('\n', '\n' + ' ' * len(tmp)))
         return fmt_str
