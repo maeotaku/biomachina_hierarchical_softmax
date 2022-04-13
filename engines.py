@@ -2,8 +2,9 @@ import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
 import torchmetrics
-from  torch.cuda.amp import autocast
-
+from metrics.mrr import MRR
+import pytorch_lightning as pl
+from metrics import get_mrr, get_rank
 
 class ExperimentEngine(pl.LightningModule):
 
@@ -109,6 +110,9 @@ class SuprEngine(ExperimentEngine):
         # self.train_cohen_kappa = torchmetrics.CohenKappa(num_classes=class_dim)
         # self.train_matthews = torchmetrics.MatthewsCorrCoef(num_classes=class_dim)
 
+        self.train_mrr = MRR()
+        self.val_mrr = MRR()
+
         if loader_val:
             self.val_acc = torchmetrics.Accuracy()
             self.val_precision = torchmetrics.Precision()
@@ -129,11 +133,13 @@ class SuprEngine(ExperimentEngine):
         # loss = self.criterion(logits, labels)
         self.train_acc(logits, labels)
         self.train_precision(logits, labels)
+        self.train_mrr(logits, labels)
 
         # mrr = torchmetrics.functional.retrieval_reciprocal_rank(logits, labels)
         # self.log('train_mrr', mrr, on_step=True, on_epoch=True)
         self.log('train_acc', self.train_acc, on_step=True, on_epoch=True,  prog_bar=True)
         self.log('train_precision', self.train_precision, on_step=True, on_epoch=True)
+        self.log('train_mrr', self.train_mrr, on_step=False, on_epoch=True)
 
         self.log("train_loss", loss)
         return loss
@@ -147,11 +153,14 @@ class SuprEngine(ExperimentEngine):
         # loss = self.criterion(logits, labels)
         self.val_acc(logits, labels)
         self.val_precision(logits, labels)
+        self.val_mrr(logits, labels)
         # mrr = torchmetrics.functional.retrieval_reciprocal_rank(logits, labels)
         # self.log('train_mrr', mrr, on_step=True, on_epoch=True)
         self.log('val_acc', self.val_acc, on_step=True, on_epoch=True)
         self.log('val_precision', self.val_precision, on_step=True, on_epoch=True)
         self.log("val_loss", loss, on_step=True, on_epoch=True)
+        self.log('val_mrr', self.val_mrr, on_step=False, on_epoch=True)
+
         return loss
 
     def on_train_epoch_start(self):
