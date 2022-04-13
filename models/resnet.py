@@ -5,12 +5,6 @@ from torch import nn
 
 from models import register
 
-
-@register
-def hresnet(pretrained=False, **kwargs):
-    return HierarchicalResNet(pretrained, **kwargs)
-
-
 @register
 def resnet_supr(pretrained=False, **kwargs):
     return ResNetSelfSupr(pretrained, **kwargs)
@@ -20,6 +14,17 @@ def resnet_supr(pretrained=False, **kwargs):
 def resnet(pretrained=False, **kwargs):
     backbone = ResNetSelfSupr(pretrained, **kwargs)
     return ResNetClassifier(backbone, **kwargs)
+
+
+@register
+def hresnet50(pretrained=True, **kwargs):
+    backbone = models.resnet50(pretrained=pretrained)
+    return HierarchicalResNet(backbone=backbone, pretrained=pretrained, **kwargs)
+
+@register
+def hresnet101(pretrained=True, **kwargs):
+    backbone = models.resnet101(pretrained=pretrained)
+    return HierarchicalResNet(backbone=backbone, pretrained=pretrained, **kwargs)
 
 
 class ResNetSelfSupr(nn.Module):
@@ -120,15 +125,17 @@ class HierarchicalSoftmax(nn.Module):
 
         # loss = -torch.mean(torch.log(target_probs.type(torch.float32) + 1e-3))
         loss = -torch.mean(torch.log(target_probs))
+        with torch.no_grad():
+            preds = torch.bmm(layer_top_probs.unsqueeze(2), layer_bottom_probs.unsqueeze(1)).flatten(start_dim=1)
 
-        return loss, target_probs, layer_top_probs, layer_bottom_probs, top_indx, botton_indx, real_indx
+        return loss, target_probs, layer_top_probs, layer_bottom_probs, top_indx, botton_indx, real_indx, preds
 
 
 class HierarchicalResNet(nn.Module):
 
-    def __init__(self, pretrained, num_classes, ntokens_per_class, **Kwargs):
+    def __init__(self, backbone, pretrained, num_classes, ntokens_per_class, **Kwargs):
         super(HierarchicalResNet, self).__init__()
-        self.backbone = models.resnet50(pretrained=pretrained)  # , num_classes=out_dim)
+        self.backbone = backbone
 
         # add mlp projection head
         dim_mlp = self.backbone.fc.in_features
@@ -137,16 +144,16 @@ class HierarchicalResNet(nn.Module):
         # dim_mlp = self.backbone.fc.out_features
         # self.fc = nn.Linear(dim_mlp, 128)
         self.hs = HierarchicalSoftmax(ntokens=num_classes, nhid=128, ntokens_per_class=ntokens_per_class)
-        self.freeze()
-
-    def freeze(self):
-        for param in self.backbone.layer1.parameters():
-            param.requires_grad = False
-        for param in self.backbone.layer2.parameters():
-            param.requires_grad = False
+    #     self.freeze()
+    #
+    # def freeze(self):
+    #     for param in self.backbone.layer1.parameters():
+    #         param.requires_grad = False
+    #     for param in self.backbone.layer2.parameters():
+    #         param.requires_grad = False
 
     def forward(self, x, y):
         x = self.backbone(x)
         # x = self.fc(x)
-        loss, target_probs, layer_top_probs, layer_bottom_probs, top_indx, botton_indx, real_indx = self.hs(x, y)
-        return loss, real_indx
+        loss, target_probs, layer_top_probs, layer_bottom_probs, top_indx, botton_indx, real_indx, preds = self.hs(x, y)
+        return loss, real_indx, preds

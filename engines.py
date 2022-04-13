@@ -115,6 +115,7 @@ class SuprEngine(ExperimentEngine):
 
     def training_step(self, train_batch, batch_idx):
         x, labels = train_batch
+        # x = x.to(memory_format=torch.channels_last)
         loss, logits, preds = self.model(x, labels)
         # logits = self.model(x)
         # loss = self.criterion(logits, labels)
@@ -131,6 +132,7 @@ class SuprEngine(ExperimentEngine):
 
     def validation_step(self, val_batch, batch_idx):
         x, labels = val_batch
+        # x = x.to(memory_format=torch.channels_last)
         loss, logits, preds = self.model(x, labels)
         # logits = self.model(x)
         # loss = self.criterion(logits, labels)

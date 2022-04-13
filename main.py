@@ -16,7 +16,11 @@ from datasets import PlatCLEFSimCLR, PlantCLEF2022Supr
 from engines import SimCLREngine, SuprEngine
 from models.factory import create_model
 
+from summary import *
+
 warnings.filterwarnings("ignore")
+warnings.simplefilter(action='ignore', category=FutureWarning)
+
 
 
 def get_engine(cfg, loader, loader_val, model, class_dim):
@@ -84,9 +88,10 @@ def get_dataset(original_path, cfg):
 
 
 # @hydra.main(config_path="config", config_name="simclr_vit.yaml")
-# @hydra.main(config_path="config", config_name="supr_hresnet.yaml")
+#@hydra.main(config_path="config", config_name="supr_hresnet50.yaml")
+@hydra.main(config_path="config", config_name="supr_hresnet101.yaml")
 # @hydra.main(config_path="config", config_name="supr_vitae.yaml")
-@hydra.main(config_path="config", config_name="supr_hefficientnet_b4.yaml")
+# @hydra.main(config_path="config", config_name="supr_hefficientnet_b4.yaml")
 # @hydra.main(config_path="config", config_name="supr_hcct_14_7x2_224.yaml")
 # @hydra.main(config_path="config", config_name="supr_hdensenet.yaml")
 def run(cfg: DictConfig):
@@ -103,6 +108,8 @@ def run(cfg: DictConfig):
     print(dst)
     print(dsv)
     model = get_model(cfg=cfg, original_path=original_path, num_classes=ds.class_size)
+    summary(model, (3, cfg.resolution, cfg.resolution), (), device='cpu')
+    # model = model.to(memory_format=torch.channels_last)
     engine = get_engine(cfg=cfg, loader=loader, loader_val=loader_val, model=model, class_dim=ds.class_size)
 
     from pytorch_lightning.callbacks import ModelCheckpoint
