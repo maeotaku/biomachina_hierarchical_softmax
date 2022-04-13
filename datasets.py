@@ -33,7 +33,10 @@ def has_bytes(filename):
     return os.stat(filename).st_size > 0
 
 def is_image_file(filename):
-    return has_file_allowed_extension(filename, IMG_EXTENSIONS) and os.path.isfile(filename) and has_bytes(filename) #and is_valid(filename)
+    res = has_file_allowed_extension(filename, IMG_EXTENSIONS) and os.path.isfile(filename) and has_bytes(filename) #and is_valid(filename)
+    if not res:
+        print(f"Bad file: {filename}")
+    return res
 
 def pil_loader(path):
     # open path as file to avoid ResourceWarning (https://github.com/python-pillow/Pillow/issues/835)

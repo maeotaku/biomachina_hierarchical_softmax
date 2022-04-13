@@ -57,20 +57,28 @@ def ViTAE_basic_10(pretrained=False, **kwargs):  # adopt performer for tokens to
     #         model, num_classes=model.num_classes, in_chans=kwargs.get('in_chans', 3))
     return model
 
+def ViTAE_basic_11(pretrained=False, **kwargs): # adopt performer for tokens to token
+    model = ViTAE_ViT_basic(RC_tokens_type=['performer', 'performer', 'performer_less'], NC_tokens_type=['transformer', 'transformer', 'transformer'], stages=3, embed_dims=[64, 64, 160], token_dims=[64, 64, 320],
+                            downsample_ratios=[4, 2, 2], NC_depth=[0, 0, 11], NC_heads=[1, 1, 5], RC_heads=[1, 1, 1], mlp_ratio=2., NC_group=[1, 1, 64], RC_group=[1, 1, 1], **kwargs)
+    model.default_cfg = default_cfgs['ViTAE_basic_7']
+    # if pretrained:
+    #     load_pretrained(
+    #         model, num_classes=model.num_classes, in_chans=kwargs.get('in_chans', 3))
+    return model
 
 class HierarchicalVITAE(nn.Module):
 
     def __init__(self, pretrained, num_classes, ntokens_per_class, **kwargs):
         super(HierarchicalVITAE, self).__init__()
-        self.backbone = ViTAE_basic_10(pretrained, **kwargs)
+        self.backbone = ViTAE_basic_11(pretrained, **kwargs)
 
         # add mlp projection head
         dim_mlp = self.backbone.head.in_features
-        self.backbone.head = nn.Linear(dim_mlp, 128)
+        self.backbone.head = nn.Linear(dim_mlp, dim_mlp)
 
         # dim_mlp = self.backbone.fc.out_features
         # self.fc = nn.Linear(dim_mlp, 128)
-        self.hs = HierarchicalSoftmax(ntokens=num_classes, nhid=128, ntokens_per_class=ntokens_per_class)
+        self.hs = HierarchicalSoftmax(ntokens=num_classes, nhid=dim_mlp, ntokens_per_class=ntokens_per_class)
     #
     # def freeze(self):
     #     for param in self.backbone.layer1.parameters():
@@ -80,8 +88,6 @@ class HierarchicalVITAE(nn.Module):
 
     def forward(self, x, y):
         x = self.backbone(x)
-        # with autocast(enabled=False):
-        #     x = x.float()
         loss, target_probs, layer_top_probs, layer_bottom_probs, top_indx, botton_indx, real_indx = self.hs(x, y)
         return loss, real_indx
 

@@ -5,6 +5,8 @@ import torchmetrics
 from metrics.mrr import MRR
 import pytorch_lightning as pl
 from metrics import get_mrr, get_rank
+import torch_optimizer as optim
+
 
 class ExperimentEngine(pl.LightningModule):
 
@@ -119,14 +121,15 @@ class SuprEngine(ExperimentEngine):
 
     def configure_optimizers(self):
         optimizer = _get_optimizer(name=self.cfg.optimizer,
-                                   params=filter(lambda p: p.requires_grad, self.model.parameters()), lr=self.cfg.lr,
+                                   #params=filter(lambda p: p.requires_grad, self.model.parameters()), lr=self.cfg.lr,
+                                   params=self.model.parameters(), lr=self.cfg.lr,
                                    weight_decay=self.cfg.weight_decay, momentum=self.cfg.momentum)
         scheduler = _get_scheduler(name=self.cfg.scheduler, optimizer=optimizer, loader=self.loader)
         return [optimizer], [scheduler]
 
     def training_step(self, train_batch, batch_idx):
         x, labels = train_batch
-        x = x.half()
+        # x = x.half()
         # with autocast():
         loss, logits = self.model(x, labels)
         # logits = self.model(x)
@@ -146,7 +149,7 @@ class SuprEngine(ExperimentEngine):
 
     def validation_step(self, val_batch, batch_idx):
         x, labels = val_batch
-        x = x.half()
+        # x = x.half()
         # with autocast():
         loss, logits = self.model(x, labels)
         # logits = self.model(x)
@@ -183,7 +186,13 @@ class SuprEngine(ExperimentEngine):
 
 
 def _get_optimizer(name, params, lr, weight_decay, momentum):
-    if name == "Adam":
+    if name == "LAMB":
+        optimizer = optim.Lamb(params, lr, weight_decay=weight_decay)
+    elif name == "SGD":
+        optimizer = torch.optim.SGD(params, lr, momentum=momentum, weight_decay=weight_decay)
+    elif name == "Adam":
+        optimizer = torch.optim.Adam(params, lr, weight_decay=weight_decay, eps=1e-4)
+    elif name == "AdamW":
         optimizer = torch.optim.Adam(params, lr, weight_decay=weight_decay, eps=1e-4)
     elif name == "SGD":
         optimizer = torch.optim.SGD(params, lr, momentum=momentum)

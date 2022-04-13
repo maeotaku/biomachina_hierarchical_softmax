@@ -6,7 +6,7 @@ import pytorch_lightning as pl
 import torch
 from omegaconf import DictConfig, OmegaConf
 from pytorch_lightning import loggers as pl_loggers
-from pytorch_lightning.callbacks import EarlyStopping
+from pytorch_lightning.callbacks import EarlyStopping, StochasticWeightAveraging
 from pytorch_lightning.loggers import WandbLogger
 from torch.utils.data import DataLoader
 from torchvision import transforms
@@ -15,6 +15,9 @@ import pickle
 from datasets import PlatCLEFSimCLR, PlantCLEF2022Supr
 from engines import SimCLREngine, SuprEngine
 from models.factory import create_model
+
+import warnings
+warnings.filterwarnings("ignore")
 
 
 def get_engine(cfg, loader, loader_val, model, class_dim):
@@ -81,8 +84,11 @@ def get_dataset(original_path, cfg):
 
 
 # @hydra.main(config_path="config", config_name="simclr_vit.yaml")
-@hydra.main(config_path="config", config_name="supr_hresnet.yaml")
+# @hydra.main(config_path="config", config_name="supr_hresnet.yaml")
 # @hydra.main(config_path="config", config_name="supr_vitae.yaml")
+# @hydra.main(config_path="config", config_name="supr_hefficientnet_b4.yaml")
+# @hydra.main(config_path="config", config_name="supr_hcct_14_7x2_224.yaml")
+@hydra.main(config_path="config", config_name="supr_hdensenet.yaml")
 def run(cfg: DictConfig):
     exp_name = get_exp_name(cfg)
     original_path = hydra.utils.get_original_cwd()
@@ -125,14 +131,15 @@ def run(cfg: DictConfig):
     tb_logger = pl_loggers.TensorBoardLogger(name=exp_name, save_dir=os.path.join(original_path, "logs/"))
     # wandb_logger = WandbLogger(name=exp_name, project='biomachina')
 
-    callbacks = [model_checkpoint_callback, engine_checkpoint_callback]
+    callbacks = [model_checkpoint_callback, engine_checkpoint_callback, StochasticWeightAveraging(swa_lrs=1e-2)]
     val_loaders = []
     if dsv:
         callbacks.append(EarlyStopping(monitor="val_loss"))
         val_loaders.append(loader_val)
 
     trainer = pl.Trainer(gpus=1, num_nodes=1, precision=cfg.precision, max_epochs=cfg.epochs,
-                         callbacks=callbacks, logger=[tb_logger], limit_train_batches=1.0, gradient_clip_val=0.5, amp_backend="native")
+                         callbacks=callbacks, logger=[tb_logger], limit_train_batches=1.0, amp_backend="native",
+                         gradient_clip_val=0.5, accumulate_grad_batches=32)
     # , accumulate_grad_batches=cfg.accumulate_batches)
     # trainer.tune(engine)
 

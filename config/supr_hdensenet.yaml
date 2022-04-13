@@ -1,12 +1,12 @@
-### src/config/supr_hresnet.yaml
+### src/config/supr_hdensenet.yaml
 defaults:
   - _self_
   - engine: supr
   - dataset: trusted
-  - model : hresnet
+  - model : hdensenet
 
-batch_size : 32
-name : "supr_hresnet"
+batch_size : 16
+name : "supr_hdensenet"
 pretrained_model : True
 pretrained_model_point : ""
 last_engine_checkpoint : ""
