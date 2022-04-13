@@ -46,4 +46,4 @@ class HierarchicalEfficientNet(nn.Module):
         x = self.backbone(x)
         x = self.fc(x)
         loss, target_probs, layer_top_probs, layer_bottom_probs, top_indx, botton_indx, real_indx = self.hs(x, y)
-        return loss, real_indx
+        return loss, real_indx, target_probs

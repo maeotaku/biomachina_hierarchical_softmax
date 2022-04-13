@@ -24,17 +24,6 @@ class ExperimentEngine(pl.LightningModule):
 
     def forward(self, x):
         return self.model(x)
-    #
-    # def training_epoch_end(self, outputs):
-    #     # this will compute and reset the metric automatically at the epoch end
-    #     self.log('train_epoch_accuracy', self.training_acc)
-    #
-    #     # this will not reset the metric automatically at the epoch end so you
-    #     # need to call it yourself
-    #     mean_precision = self.precision.compute()
-    #     self.log('train_epoch_precision', mean_precision)
-    #     self.precision.reset()
-
 
 class SimCLREngine(ExperimentEngine):
 
@@ -88,8 +77,6 @@ class SimCLREngine(ExperimentEngine):
         loss = self.criterion(logits, labels)
         self.train_acc(logits, labels)
         self.train_precision(logits, labels)
-        # mrr = torchmetrics.functional.retrieval_reciprocal_rank(logits, labels)
-        # self.log('train_mrr', mrr, on_step=True, on_epoch=True)
         self.log('train_acc', self.train_acc, on_step=True, on_epoch=True)
         self.log('train_precision', self.train_precision, on_step=True, on_epoch=True)
         self.log("train_loss", loss)
@@ -128,17 +115,13 @@ class SuprEngine(ExperimentEngine):
 
     def training_step(self, train_batch, batch_idx):
         x, labels = train_batch
-        # x = x.half()
-        # with autocast():
-        loss, logits = self.model(x, labels)
+        loss, logits, preds = self.model(x, labels)
         # logits = self.model(x)
         # loss = self.criterion(logits, labels)
         self.train_acc(logits, labels)
         self.train_precision(logits, labels)
-        self.train_mrr(logits, labels)
+        self.train_mrr(preds, labels)
 
-        # mrr = torchmetrics.functional.retrieval_reciprocal_rank(logits, labels)
-        # self.log('train_mrr', mrr, on_step=True, on_epoch=True)
         self.log('train_acc', self.train_acc, on_step=True, on_epoch=True, prog_bar=True)
         self.log('train_precision', self.train_precision, on_step=True, on_epoch=True)
         self.log('train_mrr', self.train_mrr, on_step=False, on_epoch=True, prog_bar=True)
@@ -148,16 +131,12 @@ class SuprEngine(ExperimentEngine):
 
     def validation_step(self, val_batch, batch_idx):
         x, labels = val_batch
-        # x = x.half()
-        # with autocast():
-        loss, logits = self.model(x, labels)
+        loss, logits, preds = self.model(x, labels)
         # logits = self.model(x)
         # loss = self.criterion(logits, labels)
         self.val_acc(logits, labels)
         self.val_precision(logits, labels)
-        self.val_mrr(logits, labels)
-        # mrr = torchmetrics.functional.retrieval_reciprocal_rank(logits, labels)
-        # self.log('train_mrr', mrr, on_step=True, on_epoch=True)
+        self.val_mrr(preds, labels)
         self.log('val_acc', self.val_acc, on_step=True, on_epoch=True)
         self.log('val_precision', self.val_precision, on_step=True, on_epoch=True)
         self.log("val_loss", loss, on_step=True, on_epoch=True)
