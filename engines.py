@@ -1,11 +1,10 @@
 import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
-import torchmetrics
-from metrics.mrr import MRR
-import pytorch_lightning as pl
-from metrics import get_mrr, get_rank
 import torch_optimizer as optim
+import torchmetrics
+
+from metrics.mrr import MRR
 
 
 class ExperimentEngine(pl.LightningModule):
@@ -121,7 +120,7 @@ class SuprEngine(ExperimentEngine):
 
     def configure_optimizers(self):
         optimizer = _get_optimizer(name=self.cfg.optimizer,
-                                   #params=filter(lambda p: p.requires_grad, self.model.parameters()), lr=self.cfg.lr,
+                                   # params=filter(lambda p: p.requires_grad, self.model.parameters()), lr=self.cfg.lr,
                                    params=self.model.parameters(), lr=self.cfg.lr,
                                    weight_decay=self.cfg.weight_decay, momentum=self.cfg.momentum)
         scheduler = _get_scheduler(name=self.cfg.scheduler, optimizer=optimizer, loader=self.loader)
@@ -140,9 +139,9 @@ class SuprEngine(ExperimentEngine):
 
         # mrr = torchmetrics.functional.retrieval_reciprocal_rank(logits, labels)
         # self.log('train_mrr', mrr, on_step=True, on_epoch=True)
-        self.log('train_acc', self.train_acc, on_step=True, on_epoch=True,  prog_bar=True)
+        self.log('train_acc', self.train_acc, on_step=True, on_epoch=True, prog_bar=True)
         self.log('train_precision', self.train_precision, on_step=True, on_epoch=True)
-        self.log('train_mrr', self.train_mrr, on_step=False, on_epoch=True)
+        self.log('train_mrr', self.train_mrr, on_step=False, on_epoch=True, prog_bar=True)
 
         self.log("train_loss", loss)
         return loss

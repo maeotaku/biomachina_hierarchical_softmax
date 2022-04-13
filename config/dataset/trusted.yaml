@@ -2,6 +2,6 @@ name : trusted
 path: "trusted"
 csv : "PlantCLEF2022_trusted_training_metadata.csv"
 images : "images"
-label_col : "species"
+label_col : "classid"
 filename_col : "image_path"
 train_perc : 0.9

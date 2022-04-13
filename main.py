@@ -1,4 +1,6 @@
 import os
+import pickle
+import warnings
 
 import hydra
 import pandas as pd
@@ -7,16 +9,13 @@ import torch
 from omegaconf import DictConfig, OmegaConf
 from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks import EarlyStopping, StochasticWeightAveraging
-from pytorch_lightning.loggers import WandbLogger
 from torch.utils.data import DataLoader
 from torchvision import transforms
-import pickle
 
 from datasets import PlatCLEFSimCLR, PlantCLEF2022Supr
 from engines import SimCLREngine, SuprEngine
 from models.factory import create_model
 
-import warnings
 warnings.filterwarnings("ignore")
 
 
@@ -33,7 +32,8 @@ def get_model(cfg, original_path, num_classes):
     pretrained = cfg.pretrained_model
     checkpoint_dir = get_full_path(original_path, cfg.model_checkpoints)
     model_check_point = os.path.join(checkpoint_dir, cfg.pretrained_model_point)
-    return create_model(model_name=cfg.model.name, pretrained=pretrained, checkpoint_path=model_check_point, **model_cfg)
+    return create_model(model_name=cfg.model.name, pretrained=pretrained, checkpoint_path=model_check_point,
+                        **model_cfg)
 
 
 def get_exp_name(cfg):
@@ -86,9 +86,9 @@ def get_dataset(original_path, cfg):
 # @hydra.main(config_path="config", config_name="simclr_vit.yaml")
 # @hydra.main(config_path="config", config_name="supr_hresnet.yaml")
 # @hydra.main(config_path="config", config_name="supr_vitae.yaml")
-# @hydra.main(config_path="config", config_name="supr_hefficientnet_b4.yaml")
+@hydra.main(config_path="config", config_name="supr_hefficientnet_b4.yaml")
 # @hydra.main(config_path="config", config_name="supr_hcct_14_7x2_224.yaml")
-@hydra.main(config_path="config", config_name="supr_hdensenet.yaml")
+# @hydra.main(config_path="config", config_name="supr_hdensenet.yaml")
 def run(cfg: DictConfig):
     exp_name = get_exp_name(cfg)
     original_path = hydra.utils.get_original_cwd()
@@ -96,13 +96,13 @@ def run(cfg: DictConfig):
     loader = torch.utils.data.DataLoader(dst, batch_size=cfg.batch_size, shuffle=True, drop_last=True,
                                          num_workers=cfg.num_workers, persistent_workers=True, pin_memory=True)
     loader_val = torch.utils.data.DataLoader(dsv, batch_size=cfg.batch_size, shuffle=False, drop_last=True,
-                                             num_workers=cfg.num_workers, persistent_workers=True, pin_memory=True) if dsv else None
+                                             num_workers=cfg.num_workers, persistent_workers=True,
+                                             pin_memory=True) if dsv else None
 
     print(ds)
     print(dst)
     print(dsv)
     model = get_model(cfg=cfg, original_path=original_path, num_classes=ds.class_size)
-    # model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
     engine = get_engine(cfg=cfg, loader=loader, loader_val=loader_val, model=model, class_dim=ds.class_size)
 
     from pytorch_lightning.callbacks import ModelCheckpoint
@@ -140,7 +140,6 @@ def run(cfg: DictConfig):
     trainer = pl.Trainer(gpus=1, num_nodes=1, precision=cfg.precision, max_epochs=cfg.epochs,
                          callbacks=callbacks, logger=[tb_logger], limit_train_batches=1.0, amp_backend="native",
                          gradient_clip_val=0.5, accumulate_grad_batches=32)
-    # , accumulate_grad_batches=cfg.accumulate_batches)
     # trainer.tune(engine)
 
     if cfg.last_engine_checkpoint:

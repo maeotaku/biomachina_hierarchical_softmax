@@ -11,14 +11,14 @@ class MRR(Metric):
         self.add_state("rr", default=torch.tensor([]), dist_reduce_fx="sum")
 
     def update(self, preds: torch.Tensor, target: torch.Tensor):
-        ranks = _mrr(preds, target)
+        ranks = self._mrr(preds, target, k=30)
         self.rr = torch.cat((self.rr, ranks), 0)
         return ranks.mean()
 
     def compute(self):
         return self.rr.mean()
     
-    def _mrr(outputs: torch.Tensor, targets: torch.Tensor, k=100) -> torch.Tensor:
+    def _mrr(self, outputs: torch.Tensor, targets: torch.Tensor, k=100) -> torch.Tensor:
         """
         Source: ?
         """
