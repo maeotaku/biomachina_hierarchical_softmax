@@ -175,9 +175,6 @@ def execute_training(cfg: DictConfig):
         trainer.fit(engine, train_dataloaders=loader, val_dataloaders=val_loaders)
 
 
-
-
-
 cfg=compose(config_name="supr_hefficientnet_b4")
 print(cfg)
 

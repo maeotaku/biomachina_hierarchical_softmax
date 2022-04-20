@@ -1,0 +1,28 @@
+### src/config/simclr_resnet.yaml
+defaults:
+  - _self_
+  - engine: simclr
+  - dataset: web
+  - model : hefficientnet_b4
+
+batch_size : 32 #Preguntar
+name : "simclr"
+pretrained_model : False
+pretrained_model_point : ""
+last_engine_checkpoint : ""
+resolution : 224
+n_views : 2
+epochs : 10
+optimizer: "Adam"
+scheduler: "CosineAnnealingLR"
+lr : 0.0003
+momentum : 0.9
+weight_decay : 1e-4
+log_every_n_steps : 10
+precision : 16
+temperature : 0.07
+fp16_precision : True
+num_workers : 4
+time_per_epoch : 0.25
+engine_checkpoints : "engine_checkpoints"
+model_checkpoints : "model_checkpoints"

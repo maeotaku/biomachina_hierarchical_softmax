@@ -46,3 +46,13 @@ class HierarchicalEfficientNet(nn.Module):
         x = self.backbone(x)
         loss, target_probs, layer_top_probs, layer_bottom_probs, top_indx, botton_indx, real_indx, preds = self.hs(x, y)
         return loss, real_indx, preds
+
+class EfficientNetSelfSupr(nn.Module):
+
+    def __init__(self, **kwargs):
+        super(EfficientNetSelfSupr, self).__init__()
+        self.model = hefficientnet_b4(pretrained = True)
+
+    def forward(self, x, y):
+        x = self.model(x)
+        return x
