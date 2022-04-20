@@ -34,8 +34,8 @@ def has_bytes(filename):
 
 def is_image_file(filename):
     res = has_file_allowed_extension(filename, IMG_EXTENSIONS) and os.path.isfile(filename) and has_bytes(filename) #and is_valid(filename)
-    if not res:
-        print(f"Bad file: {filename}")
+    # if not res:
+    #     print(f"Bad file: {filename}")
     return res
 
 def pil_loader(path):
@@ -187,10 +187,10 @@ class PlatCLEFSimCLR(PlantCLEF2022_Dataset):
         sample = self.loader(os.path.join(self.root, filename))
         if self.transform_x is not None:
             sample = self.transform_x(sample)
-        target = self.target_transform(target)
+        target_t = self.target_transform(target)
 
-        target = torch.tensor(target)
-        return sample, target
+        target_t = torch.tensor(target_t)
+        return sample, target_t, filename, target
     
 class PlantCLEF2022Supr(PlantCLEF2022_Dataset):
     """Dataset used to train a classifier with plantclef2022"""
@@ -209,7 +209,8 @@ class PlantCLEF2022Supr(PlantCLEF2022_Dataset):
         sample = self.loader(os.path.join(self.root, filename))
         if self.transform_x is not None:
             sample = self.transform_x(sample)
-        target = self.target_transform(target)
+        target_t = self.target_transform(target)
 
         sample = np.array(sample)
-        return sample, target
+
+        return sample, target_t, filename, target

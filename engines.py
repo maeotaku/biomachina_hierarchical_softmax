@@ -9,10 +9,11 @@ from metrics.mrr import MRR
 
 class ExperimentEngine(pl.LightningModule):
 
-    def __init__(self, model, loader, loader_val, cfg):
+    def __init__(self, model, loader, loader_val, cfg, epochs):
         super().__init__()
         self.model = model
         self.cfg = cfg
+        self.epochs = epochs
         self.loader = loader
         self.loader_val = loader_val
         self.train_acc = torchmetrics.Accuracy()
@@ -27,15 +28,15 @@ class ExperimentEngine(pl.LightningModule):
 
 class SimCLREngine(ExperimentEngine):
 
-    def __init__(self, model, loader, loader_val, cfg):
-        super(SimCLREngine, self).__init__(model=model, loader=loader, loader_val=loader_val, cfg=cfg)
+    def __init__(self, model, loader, loader_val, cfg, epochs):
+        super(SimCLREngine, self).__init__(model=model, loader=loader, loader_val=loader_val, cfg=cfg, epochs=epochs)
         self.criterion = torch.nn.CrossEntropyLoss()
 
     def configure_optimizers(self):
         optimizer = _get_optimizer(name=self.cfg.optimizer,
                                    params=filter(lambda p: p.requires_grad, self.model.parameters()), lr=self.cfg.lr,
                                    weight_decay=self.cfg.weight_decay, momentum=self.cfg.momentum)
-        scheduler = _get_scheduler(name=self.cfg.scheduler, optimizer=optimizer, loader=self.loader)
+        scheduler = _get_scheduler(name=self.cfg.scheduler, optimizer=optimizer, epochs=self.epochs)
 
         return [optimizer], [scheduler]
 
@@ -85,8 +86,8 @@ class SimCLREngine(ExperimentEngine):
 
 class SuprEngine(ExperimentEngine):
 
-    def __init__(self, model, loader, loader_val, cfg, class_dim):
-        super(SuprEngine, self).__init__(model=model, loader=loader, loader_val=loader_val, cfg=cfg)
+    def __init__(self, model, loader, loader_val, cfg, epochs, class_dim):
+        super(SuprEngine, self).__init__(model=model, loader=loader, loader_val=loader_val, cfg=cfg, epochs=epochs)
         self.class_dim = class_dim
         self.criterion = torch.nn.CrossEntropyLoss()
         self.val_criterion = torch.nn.CrossEntropyLoss()
@@ -110,12 +111,11 @@ class SuprEngine(ExperimentEngine):
                                    # params=filter(lambda p: p.requires_grad, self.model.parameters()), lr=self.cfg.lr,
                                    params=self.model.parameters(), lr=self.cfg.lr,
                                    weight_decay=self.cfg.weight_decay, momentum=self.cfg.momentum)
-        scheduler = _get_scheduler(name=self.cfg.scheduler, optimizer=optimizer, loader=self.loader)
+        scheduler = _get_scheduler(name=self.cfg.scheduler, optimizer=optimizer, epochs=self.epochs)
         return [optimizer], [scheduler]
 
     def training_step(self, train_batch, batch_idx):
         x, labels = train_batch
-        # x = x.to(memory_format=torch.channels_last)
         loss, logits, preds = self.model(x, labels)
         # logits = self.model(x)
         # loss = self.criterion(logits, labels)
@@ -132,7 +132,6 @@ class SuprEngine(ExperimentEngine):
 
     def validation_step(self, val_batch, batch_idx):
         x, labels = val_batch
-        # x = x.to(memory_format=torch.channels_last)
         loss, logits, preds = self.model(x, labels)
         # logits = self.model(x)
         # loss = self.criterion(logits, labels)
@@ -147,8 +146,8 @@ class SuprEngine(ExperimentEngine):
         return loss
 
     def on_train_epoch_start(self):
-        self.train_logits = torch.zeros(0, dtype=torch.long, device='cuda')
-        self.train_labels = torch.zeros(0, dtype=torch.long, device='cuda')
+        self.train_logits = torch.zeros(0, dtype=torch.long, device=self.device)
+        self.train_labels = torch.zeros(0, dtype=torch.long, device=self.device)
 
     # def on_train_epoch_end(self):
     #     self.train_balanced_acc(self.train_logits, self.train_labels)
@@ -181,9 +180,9 @@ def _get_optimizer(name, params, lr, weight_decay, momentum):
     return optimizer
 
 
-def _get_scheduler(name, optimizer, loader):
+def _get_scheduler(name, optimizer, epochs):
     if name == "CosineAnnealingLR":
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=len(loader), eta_min=0,
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs, eta_min=0,
                                                                last_epoch=-1)
     elif name == "ReduceLROnPlateau":
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer)

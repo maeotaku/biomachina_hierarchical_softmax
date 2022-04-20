@@ -5,7 +5,7 @@ defaults:
   - dataset: trusted
   - model : hefficientnet_b4
 
-batch_size : 24
+batch_size : 19
 name : "supr_hefficientnet_b4"
 pretrained_model : True
 pretrained_model_point : ""

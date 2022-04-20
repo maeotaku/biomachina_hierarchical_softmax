@@ -22,8 +22,9 @@ def efficientnet_b0(pretrained,  **kwargs):
 
 @register
 def hefficientnet_b0(pretrained,  **kwargs):
-    return HierarchicalEfficientNet(backbone=models.efficientnet_b0(pretrained=pretrained), **kwargs)
-
+    backbone = EfficientNet.from_pretrained('efficientnet-b0')
+    # models.efficientnet_b4(pretrained=pretrained)
+    return HierarchicalEfficientNet(backbone=backbone, **kwargs)
 @register
 def hefficientnet_b4(pretrained,  **kwargs):
     backbone = EfficientNet.from_pretrained('efficientnet-b4')
