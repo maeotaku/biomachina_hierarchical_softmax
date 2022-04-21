@@ -71,7 +71,7 @@ class SimCLREngine(ExperimentEngine):
         return logits, labels
 
     def training_step(self, train_batch, batch_idx):
-        x, _ = train_batch
+        x, _, _, _ = train_batch
         x = torch.cat(x, dim=0)
         features = self.model(x)
         logits, labels = self.info_nce_loss(features)

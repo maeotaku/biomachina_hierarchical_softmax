@@ -31,6 +31,12 @@ def hefficientnet_b4(pretrained,  **kwargs):
     # models.efficientnet_b4(pretrained=pretrained)
     return HierarchicalEfficientNet(backbone=backbone, **kwargs)
 
+@register
+def selfefficientnet_b4(pretrained,  **kwargs):
+    backbone = EfficientNet.from_pretrained('efficientnet-b4')
+    # models.efficientnet_b4(pretrained=pretrained)
+    return EfficientNetSelfSupr(backbone=backbone, **kwargs)
+
 
 class HierarchicalEfficientNet(nn.Module):
 
@@ -49,10 +55,10 @@ class HierarchicalEfficientNet(nn.Module):
 
 class EfficientNetSelfSupr(nn.Module):
 
-    def __init__(self, **kwargs):
+    def __init__(self, backbone, **kwargs):
         super(EfficientNetSelfSupr, self).__init__()
-        self.model = hefficientnet_b4(pretrained = True)
+        self.backbone = backbone
 
-    def forward(self, x, y):
-        x = self.model(x)
+    def forward(self, x):
+        x = self.backbone(x)
         return x

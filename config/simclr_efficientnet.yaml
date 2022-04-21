@@ -3,9 +3,9 @@ defaults:
   - _self_
   - engine: simclr
   - dataset: web
-  - model : hefficientnet_b4
+  - model : selfefficientnet_b4
 
-batch_size : 32 #Preguntar
+batch_size : 64 #Preguntar
 name : "simclr"
 pretrained_model : False
 pretrained_model_point : ""
