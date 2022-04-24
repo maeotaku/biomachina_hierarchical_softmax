@@ -88,8 +88,6 @@ class HierarchicalSoftmax(nn.Module):
 
         self.init_weights()
 
-
-
     def init_weights(self):
         initrange = 0.1
         self.layer_top_W.data.uniform_(-initrange, initrange)
@@ -97,14 +95,33 @@ class HierarchicalSoftmax(nn.Module):
         self.layer_bottom_W.data.uniform_(-initrange, initrange)
         self.layer_bottom_b.data.fill_(0)
 
-    def forward(self, inputs, labels):
+    def _predict(self, inputs):
         batch_size, d = inputs.size()
+
+        layer_top_logits = torch.matmul(inputs, self.layer_top_W) + self.layer_top_b
+        layer_top_probs = self.softmax(layer_top_logits)
+
+        label_position_top = torch.argmax(layer_top_probs, dim=1)
+
+        layer_bottom_logits = torch.squeeze(
+            torch.bmm(torch.unsqueeze(inputs, dim=1), self.layer_bottom_W[label_position_top]), dim=1) + \
+                              self.layer_bottom_b[label_position_top]
+        layer_bottom_probs = self.softmax(layer_bottom_logits)
+
+        return torch.bmm(layer_top_probs.unsqueeze(2), layer_bottom_probs.unsqueeze(1)).flatten(start_dim=1)
+
+    def forward(self, inputs, labels=None):
+        if labels is None:
+            return self._predict(inputs)
+        batch_size, d = inputs.size()
+
+        layer_top_logits = torch.matmul(inputs, self.layer_top_W) + self.layer_top_b
+        layer_top_probs = self.softmax(layer_top_logits)
 
         label_position_top = (labels / self.ntokens_per_class).long()
         label_position_bottom = (labels % self.ntokens_per_class).long()
 
-        layer_top_logits = torch.matmul(inputs, self.layer_top_W) + self.layer_top_b
-        layer_top_probs = self.softmax(layer_top_logits)
+        # print(layer_top_probs.shape, label_position_top.shape)
 
         layer_bottom_logits = torch.squeeze(
             torch.bmm(torch.unsqueeze(inputs, dim=1), self.layer_bottom_W[label_position_top]), dim=1) + \

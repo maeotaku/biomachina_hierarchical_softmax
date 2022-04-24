@@ -190,7 +190,7 @@ class PlatCLEFSimCLR(PlantCLEF2022_Dataset):
         target_t = self.target_transform(target)
 
         target_t = torch.tensor(target_t)
-        return sample, target_t, filename, target
+        return sample, target_t
     
 class PlantCLEF2022Supr(PlantCLEF2022_Dataset):
     """Dataset used to train a classifier with plantclef2022"""
@@ -213,4 +213,4 @@ class PlantCLEF2022Supr(PlantCLEF2022_Dataset):
 
         sample = np.array(sample)
 
-        return sample, target_t, filename, target
+        return sample, target_t
