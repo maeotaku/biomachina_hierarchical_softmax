@@ -4,7 +4,7 @@ import torchvision.models as models
 from torch import nn
 
 from models import register
-from .resnet import HierarchicalSoftmax
+from .hsoftmax import HierarchicalSoftmax
 
 
 @register

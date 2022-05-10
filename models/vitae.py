@@ -1,6 +1,6 @@
 from models import register
 from .vitae_module.vitmodules import ViTAE_ViT_basic
-from .resnet import HierarchicalSoftmax
+from .hsoftmax import HierarchicalSoftmax
 import torch.nn as nn
 from  torch.cuda.amp import autocast
 
@@ -88,8 +88,9 @@ class HierarchicalVITAE(nn.Module):
 
     def forward(self, x, y):
         x = self.backbone(x)
-        loss, target_probs, layer_top_probs, layer_bottom_probs, top_indx, botton_indx, real_indx = self.hs(x, y)
-        return loss, real_indx
+        x = nn.functional.relu(x)
+        loss, target_probs, layer_top_probs, layer_bottom_probs, top_indx, botton_indx, real_indx, preds = self.hs(x, y)
+        return loss, real_indx, preds
 
 
 #

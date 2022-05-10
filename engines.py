@@ -30,7 +30,7 @@ class SimCLREngine(ExperimentEngine):
 
     def __init__(self, model, loader, loader_val, cfg, epochs):
         super(SimCLREngine, self).__init__(model=model, loader=loader, loader_val=loader_val, cfg=cfg, epochs=epochs)
-        self.criterion = torch.nn.CrossEntropyLoss()
+        self.criterion = torch.nn.NLLLoss() #torch.nn.CrossEntropyLoss()
 
     def configure_optimizers(self):
         optimizer = _get_optimizer(name=self.cfg.optimizer,
@@ -86,11 +86,12 @@ class SimCLREngine(ExperimentEngine):
 
 class SuprEngine(ExperimentEngine):
 
-    def __init__(self, model, loader, loader_val, cfg, epochs, class_dim):
+    def __init__(self, model, ds, loader, loader_val, cfg, epochs, class_dim):
         super(SuprEngine, self).__init__(model=model, loader=loader, loader_val=loader_val, cfg=cfg, epochs=epochs)
         self.class_dim = class_dim
-        self.criterion = torch.nn.CrossEntropyLoss()
-        self.val_criterion = torch.nn.CrossEntropyLoss()
+        self.criterion = torch.nn.NLLLoss() #torch.nn.CrossEntropyLoss()
+        self.val_criterion = torch.nn.NLLLoss() #orch.nn.CrossEntropyLoss()
+        self.ds = ds
 
         # self.train_balanced_acc = torchmetrics.Accuracy(num_classes=class_dim, average='weighted')
         # self.train_auroc = torchmetrics.AUROC(num_classes=class_dim, average='weighted')
@@ -111,16 +112,35 @@ class SuprEngine(ExperimentEngine):
                                    # params=filter(lambda p: p.requires_grad, self.model.parameters()), lr=self.cfg.lr,
                                    params=self.model.parameters(), lr=self.cfg.lr,
                                    weight_decay=self.cfg.weight_decay, momentum=self.cfg.momentum)
-        scheduler = _get_scheduler(name=self.cfg.scheduler, optimizer=optimizer, epochs=self.epochs)
+#         lr_scheduler = _get_scheduler(name=self.cfg.scheduler, optimizer=optimizer, epochs=self.epochs)
+#         # reduce every epoch (default)
+        
+#         if lr_scheduler is None:
+#             return [optimizer]
+#         optimizer = torch.optim.SGD(self.parameters(), lr=self.cfg.lr, momentum=self.cfg.momentum)
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.85, verbose=True)
         return [optimizer], [scheduler]
+#         return {
+#             "optimizer": optimizer,
+#             "lr_scheduler": {
+#                 "scheduler": lr_scheduler,
+#                 "interval": "step",
+#                 "monitor": "train_loss",
+#                 "frequency": 100,
+#                 'name': 'plateau-lr'
+#             }
+#         }
+
+    def on_epoch_train_start(self) -> None:
+        self.ds.restart_windows()
 
     def training_step(self, train_batch, batch_idx):
         x, labels = train_batch
         loss, logits, preds = self.model(x, labels)
         # logits = self.model(x)
-        # loss = self.criterion(logits, labels)
-        self.train_acc(logits, labels)
-        self.train_precision(logits, labels)
+        # loss = self.criterion(torch.log(logits), labels)
+        self.train_acc(preds, labels)
+        self.train_precision(preds, labels)
         self.train_mrr(preds, labels)
 
         self.log('train_acc', self.train_acc, on_step=True, on_epoch=True, prog_bar=True)
@@ -134,9 +154,9 @@ class SuprEngine(ExperimentEngine):
         x, labels = val_batch
         loss, logits, preds = self.model(x, labels)
         # logits = self.model(x)
-        # loss = self.criterion(logits, labels)
-        self.val_acc(logits, labels)
-        self.val_precision(logits, labels)
+        # loss = self.criterion(torch.log(logits), labels)
+        self.val_acc(preds, labels)
+        self.val_precision(preds, labels)
         self.val_mrr(preds, labels)
         self.log('val_acc', self.val_acc, on_step=True, on_epoch=True)
         self.log('val_precision', self.val_precision, on_step=True, on_epoch=True)
@@ -182,10 +202,10 @@ def _get_optimizer(name, params, lr, weight_decay, momentum):
 
 def _get_scheduler(name, optimizer, epochs):
     if name == "CosineAnnealingLR":
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs, eta_min=0,
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=20, eta_min=0,
                                                                last_epoch=-1)
     elif name == "ReduceLROnPlateau":
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.8, patience=1, threshold=0.001)
     else:
         scheduler = None
     return scheduler

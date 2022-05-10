@@ -64,6 +64,7 @@ pytorch-lightning==1.5.10
 # tensorboard-plugin-wit==1.8.1
 # termcolor==1.1.0
 # threadpoolctl==3.1.0
+albumentations==1.1.0
 timm==0.5.4
 # torch==1.11.0+cu113
 torch-optimizer==0.3.0

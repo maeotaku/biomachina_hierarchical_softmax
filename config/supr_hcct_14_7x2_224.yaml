@@ -5,7 +5,7 @@ defaults:
   - dataset: trusted
   - model : hcct_14_7x2_224
 
-batch_size : 32
+batch_size : 24
 name : "supr_hcct_14_7x2_224"
 pretrained_model : True
 pretrained_model_point : ""
@@ -13,13 +13,13 @@ last_engine_checkpoint : ""
 resolution : 224
 n_views : 2
 epochs : 10
-optimizer: "LAMB"
+optimizer: "SGD"
 scheduler: "CosineAnnealingLR"
 lr : 0.0003
 momentum : 0.9
 weight_decay : 0.05
 log_every_n_steps : 10
-precision : 16
+precision : bf16
 temperature : 0.07
 fp16_precision : True
 num_workers : 2

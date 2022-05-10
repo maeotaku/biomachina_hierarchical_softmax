@@ -87,7 +87,6 @@ def get_dataset(original_path, cfg):
         return ds, ds, None
     if cfg.dataset.name == "trusted_obs":
         transform = transforms.Compose([transforms.Resize([cfg.resolution, cfg.resolution]),
-                                        transforms.AutoAugment(),
                                         transforms.ToTensor(),
                                         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
                                         ])
@@ -142,92 +141,37 @@ def get_dataset(original_path, cfg):
 def execute_training(cfg: DictConfig):
     exp_name = get_exp_name(cfg)
     original_path = CODE_ROOT # hydra.utils.get_original_cwd()
+
+    real_batch_size = cfg.batch_size
+    accumulation_steps = 32  # desired_batch_size // real_batch_size
     ds, dst, dsv = get_dataset(original_path=original_path, cfg=cfg)
-    loader = torch.utils.data.DataLoader(dst, batch_size=cfg.batch_size, shuffle=True, drop_last=True,
-                                         num_workers=cfg.num_workers, persistent_workers=True, pin_memory=True)
-    loader_val = torch.utils.data.DataLoader(dsv, batch_size=cfg.batch_size, shuffle=False, drop_last=True,
-                                             num_workers= cfg.num_workers, pin_memory=True,
-                                             persistent_workers=True) if dsv else None
-                                             
-
-    print(ds)
-    print(dst)
-    print(dsv)
-
-    # pretrained_cfg = compose(config_name="simclr_efficientnet.yaml")
-    # premodel = get_model(cfg=pretrained_cfg, original_path=original_path, num_classes=1000)
-    # pretrained_engine = SimCLREngine.load_from_checkpoint(checkpoint_path=os.path.join(original_path, cfg.engine_checkpoints, pretrained_cfg.last_engine_checkpoint),
-    #                                            model=premodel, loader=loader, loader_val=loader_val, cfg=pretrained_cfg, epochs=pretrained_cfg.epochs)
+    loader = torch.utils.data.DataLoader(ds, batch_size=real_batch_size, shuffle=True)
 
 
     model = get_model(cfg=cfg, original_path=original_path, num_classes=ds.class_size)
-    # summary(model, (3, cfg.resolution, cfg.resolution), (), device='cpu')
-    engine = get_engine(cfg=cfg, ds=dst, loader=loader, loader_val=loader_val, model=model, class_dim=ds.class_size, epochs=cfg.epochs)
-    # engine.model.backbone = pretrained_engine.model.backbone
-    # engine.model.backbone._fc = nn.Linear(engine.model.backbone._fc.in_features, 128)
+    # engine = get_engine(cfg=cfg, ds=ds, loader=loader, loader_val=None, model=model, class_dim=ds.class_size, epochs=cfg.epochs)
 
-    from pytorch_lightning.callbacks import ModelCheckpoint
+    from torch_lr_finder import LRFinder
 
-    engine_checkpoint_callback = ModelCheckpoint(
-        monitor="train_loss",
-        dirpath=os.path.join(original_path, cfg.engine_checkpoints),
-        save_top_k=1,
-        mode="min",
-        filename=f"{exp_name}" + "-{epoch}-{train_loss:.2f}-{train_acc:.2f}--{val_loss:.2f}-{val_acc:.2f}",
-        save_on_train_epoch_end=True
-    )
+        # Beware of the `batch_size` used by `DataLoader`
+    # loader = torch.utils.data.DataLoader(dst, batch_size=cfg.batch_size, shuffle=True, drop_last=True,
+    #                                      num_workers=cfg.num_workers, persistent_workers=True, pin_memory=True)
 
-    # model_checkpoint_callback = ModelCheckpoint(
-    #     monitor="train_loss",
-    #     dirpath=os.path.join(original_path, cfg.model_checkpoints),
-    #     save_top_k=1,
-    #     mode="min",
-    #     filename=f"{exp_name}" + "-{epoch}-{train_loss:.2f}-{train_acc:.2f}--{val_loss:.2f}-{val_acc:.2f}",
-    #     save_on_train_epoch_end=True,
-    #     every_n_train_steps=int((len(ds) / cfg.batch_size) * cfg.time_per_epoch),
-    #     save_weights_only=True
-    # )
+    criterion = nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(params=model.parameters(), lr=cfg.lr,
+                                   weight_decay=cfg.weight_decay, eps=1e-4)
 
-    #tb_logger = pl_loggers.TensorBoardLogger(name=exp_name, save_dir=os.path.join(original_path, "logs"))
-    wandb_logger = WandbLogger(name=exp_name, project="plantclef2022", entity="tesiarioscarranza")
-    for k, v in cfg.items():
-        wandb_logger.experiment.config[k] = v
+    # (Optional) With this setting, `amp.scale_loss()` will be adopted automatically.
+    from apex import amp
 
-    callbacks = [ engine_checkpoint_callback, StochasticWeightAveraging(swa_lrs=1e-2), LearningRateMonitor(logging_interval='step')]
-    val_loaders = []
-    if dsv:
-        callbacks.append(EarlyStopping(monitor="val_loss"))
-        val_loaders.append(loader_val)
+    model, optimizer = amp.initialize(model.to("cuda"), optimizer, opt_level='O1')
 
-#     trainer = pl.Trainer(accelerator="tpu", tpu_cores=8, max_epochs=cfg.epochs, progress_bar_refresh_rate=20,
-#                          callbacks=callbacks, logger=[ tb_logger ], limit_train_batches=1.0, gradient_clip_val=0.5, precision=16, num_sanity_val_steps=0)
-#                         #  ,
-#                         #  gradient_clip_val=0.5, num_sanity_val_steps=0)
-    trainer = pl.Trainer(gpus=-1, precision=cfg.precision, max_epochs=cfg.epochs,
-                         callbacks=callbacks, logger=[ wandb_logger ], limit_train_batches=1.0,
-                         gradient_clip_val=9, accumulate_grad_batches=32, num_sanity_val_steps=0)
-
-    if cfg.last_engine_checkpoint:
-        trainer.fit(engine, train_dataloaders=loader, val_dataloaders=val_loaders,
-                    ckpt_path=os.path.join(original_path, cfg.engine_checkpoints, cfg.last_engine_checkpoint))
-    else:
-        trainer.fit(engine, train_dataloaders=loader, val_dataloaders=val_loaders)
-
-
-# import os
-# from hydra import initialize, initialize_config_module, initialize_config_dir, compose
-# from hydra.core.global_hydra import GlobalHydra
-# from omegaconf import OmegaConf
-# GlobalHydra.instance().clear()
-
-
-#
-# cfg=compose(config_name="")
-# print(cfg)
-#
-#
-#
-# execute_training(cfg)
+    lr_finder = LRFinder(model, optimizer, criterion, device="cuda")
+    lr_finder.range_test(loader, end_lr=10, num_iter=100, step_mode="exp", accumulation_steps=accumulation_steps)
+    lr_finder.plot()
+    import matplotlib.pyplot as plt
+    plt.savefig(CODE_ROOT + 'nnloss.png')
+    lr_finder.reset()
 
 if __name__ == "__main__":
     execute_training()

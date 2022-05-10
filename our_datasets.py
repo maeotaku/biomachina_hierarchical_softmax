@@ -3,7 +3,9 @@ from torchvision.transforms import transforms
 from gaussian_blur import GaussianBlur
 from torchvision import transforms, datasets
 from tqdm import tqdm
+import random
 tqdm.pandas()
+
 from collections import Counter
 
 import sys
@@ -17,6 +19,8 @@ import torchvision
 import numpy as np
 from PIL import Image
 from sklearn.model_selection import train_test_split
+from PIL import ImageFile
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 
 IMG_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.ppm', '.bmp', '.pgm', '.tif']
@@ -214,3 +218,91 @@ class PlantCLEF2022Supr(PlantCLEF2022_Dataset):
         sample = np.array(sample)
 
         return sample, target_t
+
+
+class ObservationsDataset(torch.utils.data.Dataset):
+    def __init__(self, df, root: str, label_col: str = "classid", filename_col: str = "image_path",
+                 obs_col: str = "gbif_occurrence_id", window_size=4, channels=3, resolution=224, loader=default_loader,
+                 transform=None, fill_transform=None):
+
+        self.transform = transform
+        self.fill_transform = fill_transform
+        self.window_size = window_size
+        self.channels = channels
+        self.resolution = resolution
+        self.label_col = label_col
+        self.obs_col = obs_col
+        self.filename_col = filename_col
+        self.root = root
+        self.loader = loader
+
+        df["Index"] = df.index
+        df[obs_col].fillna(df.Index, inplace=True)
+
+        all_classes = list(df[self.label_col].unique())
+        self.class_dict = {k: v for v, k in enumerate(all_classes)}
+        self.inv_class_dict = {v: k for v, k in enumerate(all_classes)}
+
+        self.obs = df.groupby(obs_col)
+        self.restart_windows()
+
+    def split(self, train_perc: float = 0.8):
+        # train_size = int(train_perc * len(self))
+        # test_size = len(self) - train_size
+        # return torch.utils.data.random_split(self, [train_size, test_size])
+        # Split dataset into train and validation
+        train_indices, val_indices = train_test_split(list(range(len(self.targets))), test_size=1.0 - train_perc)
+                                                      # stratify=self.targets)
+        train_dataset = torch.utils.data.Subset(self, train_indices)
+        val_dataset = torch.utils.data.Subset(self, val_indices)
+        return train_dataset, val_dataset
+
+    def restart_windows(self):
+        self.observations = []
+        self.targets = []
+        self.obs.progress_apply(lambda ob: self.ob(ob))
+
+    def ob(self, images):
+        classid = images.iloc[0][self.label_col]
+        image_paths = images[self.filename_col].tolist()
+        random.shuffle(image_paths)
+        windows = [image_paths[x:x + self.window_size] for x in range(0, len(image_paths), self.window_size)]
+        self.observations += windows
+        self.targets += [self.class_dict[classid]] * len(windows)
+
+    def __len__(self):
+        return len(self.observations)
+
+    def target_transform(self, class_text):
+        """Transforms text into a class id"""
+        return self.class_dict[class_text]
+
+    def __getitem__(self, index):
+        ob = self.observations[index]
+        window_count = len(ob)
+        window = torch.zeros(self.window_size, self.channels, self.resolution, self.resolution)
+        for i in range(self.window_size):
+            if i < window_count:
+                full_path = os.path.join(self.root, ob[i])
+                image = self.loader(full_path)
+                if self.transform is not None:
+                    image = self.transform(image)
+                window[i] = image
+            else:
+                if self.fill_transform is not None:
+                    full_path = os.path.join(self.root, ob[random.randint(0, window_count - 1)])
+                    image = self.loader(full_path)
+                    image = np.array(image)
+                    image = self.fill_transform(image=image)['image']
+                    image = torch.tensor(image.transpose(2, 0, 1))
+                    window[i] = image
+            # else:
+            #     window.append(torch.zeros(3, 224, 224))
+
+        # window = torch.cat(window, dim=0)
+        target = self.targets[index]
+        return window, target
+
+    @property
+    def class_size(self):
+        return len(self.class_dict.keys())

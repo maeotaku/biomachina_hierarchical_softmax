@@ -1,4 +1,4 @@
-### src/config/simclr_resnet.yaml
+### src/config/simclr_efficientnet.yaml
 defaults:
   - _self_
   - engine: simclr
@@ -9,7 +9,7 @@ batch_size : 64 #Preguntar
 name : "simclr"
 pretrained_model : False
 pretrained_model_point : ""
-last_engine_checkpoint : ""
+last_engine_checkpoint : "simclr-ds=web-epoch=5-train_loss=0.03-train_acc=0.99--val_loss=0.00-val_acc=0.00.ckpt"
 resolution : 224
 n_views : 2
 epochs : 10
