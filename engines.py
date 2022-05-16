@@ -89,8 +89,9 @@ class SuprEngine(ExperimentEngine):
     def __init__(self, model, ds, loader, loader_val, cfg, epochs, class_dim):
         super(SuprEngine, self).__init__(model=model, loader=loader, loader_val=loader_val, cfg=cfg, epochs=epochs)
         self.class_dim = class_dim
-        self.criterion = torch.nn.NLLLoss() #torch.nn.CrossEntropyLoss()
-        self.val_criterion = torch.nn.NLLLoss() #orch.nn.CrossEntropyLoss()
+        self.softmax = torch.nn.Softmax(dim=1)
+        self.criterion = torch.nn.CrossEntropyLoss()
+        self.val_criterion = torch.nn.CrossEntropyLoss()
         self.ds = ds
 
         # self.train_balanced_acc = torchmetrics.Accuracy(num_classes=class_dim, average='weighted')
@@ -106,7 +107,7 @@ class SuprEngine(ExperimentEngine):
         if loader_val:
             self.val_acc = torchmetrics.Accuracy()
             self.val_precision = torchmetrics.Precision()
-
+            
     def configure_optimizers(self):
         optimizer = _get_optimizer(name=self.cfg.optimizer,
                                    # params=filter(lambda p: p.requires_grad, self.model.parameters()), lr=self.cfg.lr,
@@ -118,7 +119,7 @@ class SuprEngine(ExperimentEngine):
 #         if lr_scheduler is None:
 #             return [optimizer]
 #         optimizer = torch.optim.SGD(self.parameters(), lr=self.cfg.lr, momentum=self.cfg.momentum)
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.85, verbose=True)
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.75, verbose=True)
         return [optimizer], [scheduler]
 #         return {
 #             "optimizer": optimizer,
@@ -136,12 +137,23 @@ class SuprEngine(ExperimentEngine):
 
     def training_step(self, train_batch, batch_idx):
         x, labels = train_batch
-        loss, logits, preds = self.model(x, labels)
-        # logits = self.model(x)
-        # loss = self.criterion(torch.log(logits), labels)
-        self.train_acc(preds, labels)
-        self.train_precision(preds, labels)
-        self.train_mrr(preds, labels)
+#         loss, logits, preds = self.model(x, labels)
+        logits = self.model(x)
+        loss = self.criterion(logits, labels)
+        self.train_acc(logits, labels)
+        self.train_precision(logits, labels)
+        self.train_mrr(logits, labels)
+        
+        
+        
+        #x, labels = train_batch
+        #loss, logits, preds = self.model(x, labels)
+        #logits = self.model(x)
+        #loss = torch.nn.functional.nll_loss(torch.nn.functional.log_softmax(logits / 0.07), labels)
+        #preds = self.softmax(logits)
+        #self.train_acc(preds, labels)
+        #self.train_precision(preds, labels)
+        #self.train_mrr(preds, labels)
 
         self.log('train_acc', self.train_acc, on_step=True, on_epoch=True, prog_bar=True)
         self.log('train_precision', self.train_precision, on_step=True, on_epoch=True)
@@ -152,12 +164,12 @@ class SuprEngine(ExperimentEngine):
 
     def validation_step(self, val_batch, batch_idx):
         x, labels = val_batch
-        loss, logits, preds = self.model(x, labels)
-        # logits = self.model(x)
-        # loss = self.criterion(torch.log(logits), labels)
-        self.val_acc(preds, labels)
-        self.val_precision(preds, labels)
-        self.val_mrr(preds, labels)
+#         loss, logits, preds = self.model(x, labels)
+        logits = self.model(x)
+        loss = self.val_criterion(logits, labels)
+        self.val_acc(logits, labels)
+        self.val_precision(logits, labels)
+        self.val_mrr(logits, labels)
         self.log('val_acc', self.val_acc, on_step=True, on_epoch=True)
         self.log('val_precision', self.val_precision, on_step=True, on_epoch=True)
         self.log("val_loss", loss, on_step=True, on_epoch=True)
@@ -209,3 +221,4 @@ def _get_scheduler(name, optimizer, epochs):
     else:
         scheduler = None
     return scheduler
+
