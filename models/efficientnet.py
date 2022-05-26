@@ -64,8 +64,8 @@ class HierarchicalEfficientNet(nn.Module):
     def __init__(self, backbone, num_classes, ntokens_per_class, **kwargs):
         super(HierarchicalEfficientNet, self).__init__()
         self.backbone = backbone
-        self.backbone._fc = nn.Linear(self.backbone._fc.in_features, 256)
-        self.hs = HierarchicalSoftmax(ntokens=num_classes, nhid=256, ntokens_per_class=ntokens_per_class)
+        self.backbone._fc = nn.Linear(self.backbone._fc.in_features, 128)
+        self.hs = HierarchicalSoftmax(ntokens=num_classes, nhid=128, ntokens_per_class=ntokens_per_class)
 
     def forward(self, x, y=None):
         x = self.backbone(x)
