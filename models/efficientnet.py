@@ -6,6 +6,8 @@ from .registry import register
 from .hsoftmax import HierarchicalSoftmax
 from efficientnet_pytorch import EfficientNet
 from .obs_transformer import HObservationTransformer
+import timm
+import torch
 
 @register
 def efficientnet_b0(pretrained,  **kwargs):
@@ -36,6 +38,21 @@ def efficientnet_b4(pretrained, num_classes, **kwargs):
     return model
 
 
+@register
+def efficientnetv2_l(pretrained=False, **kwargs):
+
+    class Effcientv2_l(nn.Module):
+
+        def __init__(self, pretrained, num_classes, **kwargs):
+            super(Effcientv2_l, self).__init__()
+            module = timm.create_model('tf_efficientnet_b4', pretrained=pretrained, num_classes=num_classes)
+            self.model = torch.compile(module)
+
+
+        def forward(self, x, y):
+            return self.model(x)
+
+    return Effcientv2_l(pretrained, **kwargs)
 
 register
 def hefficientnet_b0(pretrained,  **kwargs):

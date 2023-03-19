@@ -1,5 +1,5 @@
-name : vit_encoder
-arch : "vit"
+name : htimm_model
+arch : "htimm_model"
 image_size : 224
 patch_size : 32
 dim : 128
@@ -7,4 +7,5 @@ depth : 6
 heads : 16
 dropout : 0.1
 emb_dropout : 0.1
-mlp_dim : 2048
+mlp_dim : 256
+ntokens_per_class : 80

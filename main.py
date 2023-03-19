@@ -1,50 +1,49 @@
 import os
 import pickle
 import warnings
+from datetime import timedelta
 
+import albumentations as A
 import hydra
 import pandas as pd
-import torch
-from omegaconf import DictConfig, OmegaConf
-from pytorch_lightning.callbacks import EarlyStopping, StochasticWeightAveraging, LearningRateMonitor
-from torch.utils.data import DataLoader
-from torchvision import transforms
 import pytorch_lightning as pl
-import albumentations as A
-
-from pytorch_lightning import loggers as pl_loggers
-from pytorch_lightning.loggers import WandbLogger
+import torch
 import wandb
-from tqdm import tqdm_notebook as tqdm
-
-
-from our_datasets import PlatCLEFSimCLR, PlantCLEF2022Supr, ObservationsDataset
 from engines import SimCLREngine, SuprEngine
 from models.factory import create_model
-
+from omegaconf import DictConfig, OmegaConf
+from our_datasets import (  # PlantCLEF2022Supr #PlatCLEFSimCLR, ObservationsDataset
+    FungiDataModule, get_full_path)
+from pytorch_lightning import loggers as pl_loggers
+from pytorch_lightning.callbacks import (EarlyStopping, LearningRateMonitor,
+                                         StochasticWeightAveraging)
+from pytorch_lightning.loggers import WandbLogger
 from summary import *
+# from torchvision.transforms.autoaugment import AutoAugmentPolicy
+from tqdm import tqdm_notebook as tqdm
 
 warnings.filterwarnings("ignore")
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 
-CODE_ROOT = f'C:/Users/maeot/Documents/code/biomachina'
+CODE_ROOT = f'/home/maeotaku/Documents/code/biomachina/'
 
 import sys
+
 sys.path.insert(0, CODE_ROOT)
 
 import os
-from hydra import initialize, initialize_config_module, initialize_config_dir, compose
+
+from hydra import (compose, initialize, initialize_config_dir,
+                   initialize_config_module)
 from omegaconf import OmegaConf
-# initialize_config_dir(config_dir=os.path.join(CODE_ROOT, "config"))
 
 
-
-def get_engine(cfg, ds, loader, loader_val, model, class_dim, epochs):
-    if cfg.engine.name == "simclr":
-        return SimCLREngine(model=model, loader=loader, loader_val=loader_val, cfg=cfg, epochs=epochs)
-    else:
-        return SuprEngine(model=model, ds=ds, loader=loader, loader_val=loader_val, cfg=cfg, epochs=epochs, class_dim=class_dim)
+def get_engine(cfg, name, model, class_dim, epochs):
+    # if name == "simclr":
+        # return SimCLREngine(model=model, loader=loader, loader_val=loader_val, cfg=cfg, epochs=epochs)
+    # else:
+    return SuprEngine(model=model, cfg=cfg, epochs=epochs, class_dim=class_dim)
 
 
 def get_model(cfg, original_path, num_classes):
@@ -53,181 +52,72 @@ def get_model(cfg, original_path, num_classes):
     pretrained = cfg.pretrained_model
     checkpoint_dir = get_full_path(original_path, cfg.model_checkpoints)
     model_check_point = os.path.join(checkpoint_dir, cfg.pretrained_model_point)
-    return create_model(model_name=cfg.model.name, pretrained=pretrained, checkpoint_path=model_check_point,
+    return create_model(model_name=cfg.model.name, pretrained=pretrained, checkpoint_path=model_check_point, pretrained_version=cfg.pretrained_version,
                         **model_cfg)
 
 
 def get_exp_name(cfg):
+    if "pretrained_version" in cfg:
+        return f"{cfg.pretrained_version}"
     return f"{cfg.name}-ds={cfg.dataset.name}"
 
 
-def get_full_path(base_path, path):
-    r"""
-        Expands environment variables and user alias (~ tilde), in the case of relative paths it uses the base path
-        to create a full path.
-
-        args:
-            base_path: used in case of path is relative path to expand the path.
-            path: directory to be expanded. i.e data, ./web, ~/data, $HOME, %USER%, /data
-    """
-    eval_path = os.path.expanduser(os.path.expandvars(path))
-    return eval_path if os.path.isabs(eval_path) else os.path.join(base_path, eval_path)
 
 
-def get_dataset(original_path, cfg):
-    columns = ["classid", "image_path", "species", "genus", "family", "gbif_occurrence_id"]
-    ds_root = get_full_path(original_path, cfg.dataset.path)
-    df = pd.read_csv(os.path.join(ds_root, cfg.dataset.csv), sep=";", usecols=columns)
-    # df = df.head(n=1000)
-    if cfg.dataset.name == "web":
-        ds = PlatCLEFSimCLR(df, root=os.path.join(ds_root, cfg.dataset.images),
-                            label_col=cfg.dataset.label_col,
-                            filename_col=cfg.dataset.filename_col,
-                            size=cfg.resolution)
-        return ds, ds, None
-    if cfg.dataset.name == "trusted_obs":
-        transform = transforms.Compose([transforms.Resize([cfg.resolution, cfg.resolution]),
-                                        transforms.AutoAugment(),
-                                        transforms.ToTensor(),
-                                        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-                                        ])
-
-        fill_transform = A.Compose([
-            # A.RandomCrop(width=256, height=256),
-            A.Resize(height=cfg.resolution, width=cfg.resolution, always_apply=True),
-            A.HorizontalFlip(p=0.5),
-            A.RandomBrightnessContrast(p=0.5),
-            A.RandomRain(p=0.5),
-            A.RandomFog(p=0.5),
-            # transforms.ToTensor(),
-            A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ])
-        ds = ObservationsDataset(df, root=os.path.join(ds_root, cfg.dataset.images),
-                                label_col=cfg.dataset.label_col, filename_col=cfg.dataset.filename_col,
-                                window_size=2, resolution=cfg.resolution,
-                                transform=transform, fill_transform=None)
-        dst, dsv = ds.split(train_perc=cfg.dataset.train_perc)
-        return ds, dst, dsv
-    if cfg.dataset.name == "trusted":
-        from os.path import exists
-        path = os.path.join(original_path, "trusted_ds_cache.pickle")
-        if exists(path):
-            ds = pickle.load(open(path, "rb"))
-            print("Dataset cache loaded.")
-        else:
-            transform = transforms.Compose([transforms.Resize([cfg.resolution, cfg.resolution]),
-                                            transforms.ToTensor(),
-                                            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-                                            ])
-            ds = PlantCLEF2022Supr(df, root=os.path.join(ds_root, cfg.dataset.images),
-                                   label_col=cfg.dataset.label_col, filename_col=cfg.dataset.filename_col,
-                                   transform=transform)
-            pickle.dump(ds, open(path, "wb"))
-        dst, dsv = ds.split(train_perc=cfg.dataset.train_perc)
-        return ds, dst, dsv
-    
-    
-    
-
-# @hydra.main(config_path="config", config_name="simclr_vit.yaml")
-@hydra.main(config_path="config", config_name="supr_hresnet50.yaml")
-# @hydra.main(config_path="config", config_name="supr_hresnet101.yaml")
-# @hydra.main(config_path="config", config_name="supr_vitae.yaml")
-# @hydra.main(config_path="config", config_name="supr_hefficientnet_b4.yaml")
-# @hydra.main(config_path="config", config_name="supr_hcct_14_7x2_224.yaml")
-# @hydra.main(config_path="config", config_name="supr_hdensenet.yaml")
-# @hydra.main(config_path="config", config_name="supr_hefficientnet_b4.yaml")
-# @hydra.main(config_path="config", config_name="supr_obs_hefficientnet_b4.yaml")
-# @hydra.main(config_path="config", config_name="supr_obs_hresnet50.yaml")
+@hydra.main(config_path="config", config_name="supr_timm.yaml")
+# @hydra.main(config_path="config", config_name="supr_htimm.yaml")
 def execute_training(cfg: DictConfig):
     exp_name = get_exp_name(cfg)
-    original_path = CODE_ROOT # hydra.utils.get_original_cwd()
-    ds, dst, dsv = get_dataset(original_path=original_path, cfg=cfg)
-    loader = torch.utils.data.DataLoader(dst, batch_size=cfg.batch_size, shuffle=True, drop_last=True,
-                                         num_workers=cfg.num_workers, persistent_workers=True, pin_memory=True)
-    loader_val = torch.utils.data.DataLoader(dsv, batch_size=cfg.batch_size, shuffle=False, drop_last=True,
-                                             num_workers= cfg.num_workers, pin_memory=True,
-                                             persistent_workers=True) if dsv else None
-                                             
+    original_path = CODE_ROOT
+   
+    datamodule = FungiDataModule(original_path, cfg=cfg)
+    datamodule.setup()
 
-    print(ds)
-    print(dst)
-    print(dsv)
-
-    # pretrained_cfg = compose(config_name="simclr_efficientnet.yaml")
-    # premodel = get_model(cfg=pretrained_cfg, original_path=original_path, num_classes=1000)
-    # pretrained_engine = SimCLREngine.load_from_checkpoint(checkpoint_path=os.path.join(original_path, cfg.engine_checkpoints, pretrained_cfg.last_engine_checkpoint),
-    #                                            model=premodel, loader=loader, loader_val=loader_val, cfg=pretrained_cfg, epochs=pretrained_cfg.epochs)
-
-
-    model = get_model(cfg=cfg, original_path=original_path, num_classes=ds.class_size)
-    # summary(model, (3, cfg.resolution, cfg.resolution), (), device='cpu')
-    engine = get_engine(cfg=cfg, ds=dst, loader=loader, loader_val=loader_val, model=model, class_dim=ds.class_size, epochs=cfg.epochs)
-    # engine.model.backbone = pretrained_engine.model.backbone
-    # engine.model.backbone._fc = nn.Linear(engine.model.backbone._fc.in_features, 128)
+    model = get_model(cfg=cfg, original_path=original_path, num_classes=datamodule.class_size)
+    engine = get_engine(name=cfg.engine.name, cfg=cfg, model=model, class_dim=datamodule.class_size, epochs=cfg.epochs)
 
     from pytorch_lightning.callbacks import ModelCheckpoint
 
+    if cfg.wandb_id != "":
+        wandb_logger = WandbLogger(name=exp_name, project=cfg.wandb_project, entity=cfg.wandb_entity, id=cfg.wandb_id, resume="allow")
+    else:
+        wandb_logger = WandbLogger(name=exp_name, project=cfg.wandb_project, entity=cfg.wandb_entity)
+    wandb.init(config=cfg.__dict__, allow_val_change=True)
+    wandb.config.update(cfg, allow_val_change=True)
+    
     engine_checkpoint_callback = ModelCheckpoint(
-        monitor="train_loss",
+        monitor="train_acc",
         dirpath=os.path.join(original_path, cfg.engine_checkpoints),
         save_top_k=1,
-        mode="min",
-        filename=f"{exp_name}" + "-{epoch}-{train_loss:.2f}-{train_acc:.2f}--{val_loss:.2f}-{val_acc:.2f}",
-        save_on_train_epoch_end=True
+        mode="max",
+        filename=f"{exp_name}-{wandb.run.id}" + "-{epoch}-{train_loss:.2f}-{train_acc:.2f}--{val_loss:.2f}-{val_acc:.2f}",
+        train_time_interval=timedelta(minutes=15)
     )
 
-    # model_checkpoint_callback = ModelCheckpoint(
-    #     monitor="train_loss",
-    #     dirpath=os.path.join(original_path, cfg.model_checkpoints),
-    #     save_top_k=1,
-    #     mode="min",
-    #     filename=f"{exp_name}" + "-{epoch}-{train_loss:.2f}-{train_acc:.2f}--{val_loss:.2f}-{val_acc:.2f}",
-    #     save_on_train_epoch_end=True,
-    #     every_n_train_steps=int((len(ds) / cfg.batch_size) * cfg.time_per_epoch),
-    #     save_weights_only=True
-    # )
+    callbacks = [ engine_checkpoint_callback, LearningRateMonitor(logging_interval='step')] #StochasticWeightAveraging(swa_lrs=1e-2),
+    # callbacks.append(EarlyStopping(monitor="val_loss"))
 
-    #tb_logger = pl_loggers.TensorBoardLogger(name=exp_name, save_dir=os.path.join(original_path, "logs"))
-    wandb_logger = WandbLogger(name=exp_name, project="plantclef2022", entity="tesiarioscarranza")
-    for k, v in cfg.items():
-        wandb_logger.experiment.config[k] = v
+    trainer = pl.Trainer(precision=cfg.precision, max_epochs=cfg.epochs, accelerator="gpu", devices=2, strategy="ddp", num_nodes=1,
+                        # accumulate_grad_batches=10,
+                        callbacks=callbacks, logger=[ wandb_logger ], limit_train_batches=1.0)
+                        # gradient_clip_val=0.25) #,  num_sanity_val_steps=0)
 
-    callbacks = [ engine_checkpoint_callback, StochasticWeightAveraging(swa_lrs=1e-2), LearningRateMonitor(logging_interval='step')]
-    val_loaders = []
-    if dsv:
-        callbacks.append(EarlyStopping(monitor="val_loss"))
-        val_loaders.append(loader_val)
-
-#     trainer = pl.Trainer(accelerator="tpu", tpu_cores=8, max_epochs=cfg.epochs, progress_bar_refresh_rate=20,
-#                          callbacks=callbacks, logger=[ tb_logger ], limit_train_batches=1.0, gradient_clip_val=0.5, precision=16, num_sanity_val_steps=0)
-#                         #  ,
-#                         #  gradient_clip_val=0.5, num_sanity_val_steps=0)
-    trainer = pl.Trainer(gpus=-1, precision=cfg.precision, max_epochs=cfg.epochs,
-                         callbacks=callbacks, logger=[ wandb_logger ], limit_train_batches=1.0,
-                         gradient_clip_val=9, accumulate_grad_batches=32, num_sanity_val_steps=0)
-
-    if cfg.last_engine_checkpoint:
-        trainer.fit(engine, train_dataloaders=loader, val_dataloaders=val_loaders,
-                    ckpt_path=os.path.join(original_path, cfg.engine_checkpoints, cfg.last_engine_checkpoint))
+    if not cfg.last_engine_checkpoint.path:
+        trainer.fit(engine, datamodule=datamodule)
     else:
-        trainer.fit(engine, train_dataloaders=loader, val_dataloaders=val_loaders)
+        prev_engine_path = os.path.join(original_path, cfg.engine_checkpoints, cfg.last_engine_checkpoint.path)
+        # if cfg.engine == cfg.last_engine_checkpoint.engine:
+        print("Training and loading.")
+        trainer.fit(engine, datamodule=datamodule, ckpt_path=prev_engine_path)
+        # else: 
+        #     prev_engine = get_engine(name=cfg.last_engine_checkpoint.engine, cfg=cfg, ds=dst, loader=loader, loader_val=loader_val, model=model, class_dim=512, epochs=cfg.epochs)
+        #     prev_engine.load_from_checkpoint(prev_engine_path, cfg=cfg, ds=dst, loader=loader, loader_val=loader_val, model=model, epochs=cfg.epochs)
+        #     # extract model from previous engine into new one
+        #     engine.model = prev_engine.model
 
+        #     # engine.model.change_head(num_classes=ds.class_size)
+        #     trainer.fit(engine, train_dataloaders=loader, val_dataloaders=val_loaders)
 
-# import os
-# from hydra import initialize, initialize_config_module, initialize_config_dir, compose
-# from hydra.core.global_hydra import GlobalHydra
-# from omegaconf import OmegaConf
-# GlobalHydra.instance().clear()
-
-
-#
-# cfg=compose(config_name="")
-# print(cfg)
-#
-#
-#
-# execute_training(cfg)
 
 if __name__ == "__main__":
     execute_training()

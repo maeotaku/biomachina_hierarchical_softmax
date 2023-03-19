@@ -1,3 +1,0 @@
-name : selfefficientnet_b4
-ntokens_per_class : 80
-pretrained_model_point : ""

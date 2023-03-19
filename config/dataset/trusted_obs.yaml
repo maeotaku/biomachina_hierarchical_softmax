@@ -1,5 +1,5 @@
 name : trusted_obs
-path: "trusted"
+path: "C:\datasets\plantclef2022\trusted"
 csv : "PlantCLEF2022_trusted_training_metadata.csv"
 images : "images"
 label_col : "classid"

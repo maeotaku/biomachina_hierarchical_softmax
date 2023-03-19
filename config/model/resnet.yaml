@@ -1,4 +1,0 @@
-name : resnet
-arch : "resnet50"
-feature_dim : 512
-

@@ -1,3 +1,0 @@
-name : obs_hresnet50
-ntokens_per_class : 800
-pretrained_model_point : ""

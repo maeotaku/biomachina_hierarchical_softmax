@@ -70,15 +70,19 @@ class HierarchicalVITAE(nn.Module):
 
     def __init__(self, pretrained, num_classes, ntokens_per_class, **kwargs):
         super(HierarchicalVITAE, self).__init__()
-        self.backbone = ViTAE_basic_11(pretrained, **kwargs)
+        import timm
+        self.backbone = timm.create_model('vit_base_patch16_224', pretrained=pretrained)
+
+        # self.backbone = ViTAE_basic_11(pretrained, **kwargs)
 
         # add mlp projection head
-        dim_mlp = self.backbone.head.in_features
-        self.backbone.head = nn.Linear(dim_mlp, dim_mlp)
+        # dim_mlp = self.backbone.head.in_features
+        # self.backbone.head = nn.Linear(dim_mlp, num_classes)
 
+        # self.backbone.head = nn.Linear(dim_mlp, dim_mlp)
         # dim_mlp = self.backbone.fc.out_features
-        # self.fc = nn.Linear(dim_mlp, 128)
-        self.hs = HierarchicalSoftmax(ntokens=num_classes, nhid=dim_mlp, ntokens_per_class=ntokens_per_class)
+        # self.fc = nn.Linear(dim_mlp, num_classes)
+        self.hs = HierarchicalSoftmax(ntokens=num_classes, nhid=1000, ntokens_per_class=ntokens_per_class)
     #
     # def freeze(self):
     #     for param in self.backbone.layer1.parameters():
@@ -87,6 +91,7 @@ class HierarchicalVITAE(nn.Module):
     #         param.requires_grad = False
 
     def forward(self, x, y):
+        # return self.backbone(x)
         x = self.backbone(x)
         x = nn.functional.relu(x)
         loss, target_probs, layer_top_probs, layer_bottom_probs, top_indx, botton_indx, real_indx, preds = self.hs(x, y)

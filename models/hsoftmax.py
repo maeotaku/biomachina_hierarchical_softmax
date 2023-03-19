@@ -53,13 +53,14 @@ class HierarchicalSoftmax(nn.Module):
 
         return torch.bmm(layer_top_probs.unsqueeze(2), layer_bottom_probs.unsqueeze(1)).flatten(start_dim=1)
 
-    def forward(self, inputs, labels=None, T=5.0):
+    def forward(self, inputs, labels=None, T=1.0):
         if labels is None:
             return self._predict(inputs)
+
         batch_size, d = inputs.size()
 
         layer_top_logits = torch.matmul(inputs, self.layer_top_W) + self.layer_top_b
-        layer_top_probs = nn.functional.log_softmax(layer_top_logits / T)
+        layer_top_probs = nn.functional.log_softmax(layer_top_logits)
 
         label_position_top = (labels / self.ntokens_per_class).long()
         label_position_bottom = (labels % self.ntokens_per_class).long()
@@ -69,7 +70,7 @@ class HierarchicalSoftmax(nn.Module):
         layer_bottom_logits = torch.squeeze(
             torch.bmm(torch.unsqueeze(inputs, dim=1), self.layer_bottom_W[label_position_top]), dim=1) + \
                               self.layer_bottom_b[label_position_top]
-        layer_bottom_probs = nn.functional.log_softmax(layer_bottom_logits / T)
+        layer_bottom_probs = nn.functional.log_softmax(layer_bottom_logits)
 
         target_probs = layer_top_probs[torch.arange(batch_size).long(), label_position_top] + layer_bottom_probs[
             torch.arange(batch_size).long(), label_position_bottom]
@@ -94,4 +95,5 @@ class HierarchicalSoftmax(nn.Module):
             #torch.bmm(layer_top_probs.unsqueeze(2), layer_bottom_probs.unsqueeze(1)).flatten(start_dim=1)
 
         return loss, target_probs, layer_top_probs, layer_bottom_probs, top_indx, botton_indx, real_indx, preds
+
 

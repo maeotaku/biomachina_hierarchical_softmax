@@ -7,6 +7,7 @@ def create_model(
         model_name: str,
         pretrained: bool = False,
         checkpoint_path='',
+        pretrained_version=None,
         **kwargs
         ):
     """Create a model
@@ -24,7 +25,10 @@ def create_model(
         raise RuntimeError('Unknown model (%s)' % model_name)
 
     create_fn = model_entrypoint(model_name)
-    model = create_fn(pretrained=pretrained, **kwargs)
+    if pretrained_version:
+        model = create_fn(pretrained=pretrained, pretrained_version=pretrained_version, **kwargs)
+    else:
+        model = create_fn(pretrained=pretrained, **kwargs)
 
     if os.path.isfile(checkpoint_path):
         model.load_checkpoint(model, checkpoint_path)

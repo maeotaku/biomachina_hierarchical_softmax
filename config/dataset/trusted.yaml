@@ -1,5 +1,5 @@
 name : trusted
-path: "trusted"
+path: "/home/maeotaku/Documents/dataset/trusted"
 csv : "PlantCLEF2022_trusted_training_metadata.csv"
 images : "images"
 label_col : "classid"

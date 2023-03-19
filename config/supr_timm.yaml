@@ -1,0 +1,34 @@
+defaults:
+  - _self_
+  - engine: supr
+  - dataset: fungi
+  - model : timm_model
+
+batch_size : 10 # 10 #176 #80
+name : "supr_timm"
+pretrained_version : "vit_large_patch16_384" # "vit_large_patch16_384" # vit_base_patch16_224 #"convnext_base_in22ft1k"
+pretrained_model : True
+wandb_project : "fungiclef2023"
+wandb_entity : "tesiarioscarranza"
+wandb_id : ""
+pretrained_model_point : ""
+last_engine_checkpoint : 
+  engine : supr
+  path : ""
+resolution : 384 #224
+resolution_test : 384 #224
+n_views : 2
+epochs : 20
+optimizer: "Adam"
+scheduler: "StepLR"
+lr : 0.0001
+momentum : 0.9
+weight_decay : 1e-4
+log_every_n_steps : 10
+precision : 16
+temperature : 0.07
+fp16_precision : True
+num_workers : 6
+time_per_epoch : 0.25
+engine_checkpoints : "engine_checkpoints"
+model_checkpoints : "model_checkpoints"

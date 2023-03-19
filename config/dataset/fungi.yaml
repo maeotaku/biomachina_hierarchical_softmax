@@ -1,0 +1,13 @@
+name : fungi
+
+path: "/home/maeotaku/Documents/dataset/fungiclef2023/train/"
+csv : "FungiCLEF2023_train_metadata_PRODUCTION.csv"
+images : "DF20"
+
+path_val: "/home/maeotaku/Documents/dataset/fungiclef2023/val/"
+csv_val : "FungiCLEF2023_val_metadata_PRODUCTION.csv"
+images_val : "DF21"
+
+label_col : "class_id"
+filename_col : "image_path"
+train_perc : 0.95
