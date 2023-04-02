@@ -207,12 +207,12 @@ class FungiDataModule(LightningDataModule):
                                         transforms.ToTensor(),
                                         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
                                         ])
-        self.transform_val = transforms.Compose([
-                                        # transforms.AutoAugment(AutoAugmentPolicy.IMAGENET),
-                                        transforms.Resize([cfg.resolution_test, cfg.resolution_test]),
-                                        transforms.ToTensor(),
-                                        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-                                        ])
+        # self.transform_val = transforms.Compose([
+        #                                 # transforms.AutoAugment(AutoAugmentPolicy.IMAGENET),
+        #                                 transforms.Resize([cfg.resolution_test, cfg.resolution_test]),
+        #                                 transforms.ToTensor(),
+        #                                 transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        #                                 ])
 
         self.batch_size = cfg.batch_size
         self.num_workers = cfg.num_workers
@@ -221,7 +221,7 @@ class FungiDataModule(LightningDataModule):
 
     @property
     def class_size(self):
-        return self.train_dataset.class_size
+        return len(self.class_dict)
        
     def setup(self, stage=None):
 
@@ -232,7 +232,7 @@ class FungiDataModule(LightningDataModule):
         else:
             self.val_dataset = LifeCLEFDataset(self.df_val, root=os.path.join(self.ds_root_val, self.cfg.dataset.images_val),
                                    label_col=self.cfg.dataset.label_col, filename_col=self.cfg.dataset.filename_col,
-                                   transform=self.transform_val, class_dict=self.class_dict, inv_class_dict=self.inv_class_dict)
+                                   transform=self.transform_train, class_dict=self.class_dict, inv_class_dict=self.inv_class_dict)
             pickle.dump(self.val_dataset, open(path, "wb"))
 
         path = os.path.join(self.original_path, self.FILENAME_TRAIN)
@@ -247,6 +247,12 @@ class FungiDataModule(LightningDataModule):
 
         print(self.train_dataset)
         print(self.val_dataset)
+
+        train_split1, train_split2 = self.train_dataset.split(train_perc = self.cfg.dataset.train_perc)
+        val_split1, val_split2 = self.val_dataset.split(train_perc = self.cfg.dataset.train_perc)
+        self.train_dataset = torch.utils.data.ConcatDataset([train_split1, val_split1])
+        self.val_dataset = torch.utils.data.ConcatDataset([train_split2, val_split2])
+
 
 
 

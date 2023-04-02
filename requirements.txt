@@ -1,13 +1,14 @@
 efficientnet-pytorch==0.7.1
 hydra-core
 linformer==0.2.1
-lxml==4.8.0
-pytorch-lightning==1.8.1
-albumentations==1.1.0
+lxml
+pytorch-lightning
+albumentations
 timm==0.5.4
-# torch==1.13.0+cu117
-torch-optimizer==0.3.0
-torchmetrics==0.7.2
-wandb==0.12.11
+torch
+torch-optimizer
+torchmetrics~=0.9
+wandb
 pandas
 einops
+torcheval

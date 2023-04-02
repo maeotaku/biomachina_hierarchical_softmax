@@ -10,7 +10,6 @@ from torchmetrics import MetricCollection
 from torchmetrics.classification import Accuracy, F1Score
 from torcheval.metrics import ReciprocalRank
 
-from metrics.mrr import MRR
 
 
 class ExperimentEngine(pl.LightningModule):
