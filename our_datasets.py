@@ -2,10 +2,7 @@ import pickle
 import random
 
 import pandas as pd
-# from gaussian_blur import GaussianBlur
 from torchvision import datasets, transforms
-# from torchvision.transforms import transforms
-# from torchvision.transforms.autoaugment import AutoAugmentPolicy
 from tqdm import tqdm
 
 tqdm.pandas()
@@ -42,7 +39,7 @@ def has_bytes(filename):
     return os.stat(filename).st_size > 0
 
 def is_image_file(filename):
-    res = has_file_allowed_extension(filename, IMG_EXTENSIONS) and os.path.isfile(filename) and has_bytes(filename) and is_valid(filename)
+    res = has_file_allowed_extension(filename, IMG_EXTENSIONS) and os.path.isfile(filename) and has_bytes(filename) # and is_valid(filename)
     return res
 
 def pil_loader(path):
@@ -126,7 +123,6 @@ class LifeCLEFDataset(Dataset):
         self.targets = [ sample[1] for sample in self.samples ]
         self.inv_class_dict = inv_class_dict # if inv_class_dict is not None else {}
         self.class_dict = class_dict #if class_dict is not None else  {}
-        # self.generate_classes_dict(df, label_col)
         
         self.loader = loader
         self.transform_x = transform
@@ -279,29 +275,23 @@ class FungiDataModule(LightningDataModule):
 class PlantDataModule(LightningDataModule):
 
     FILENAME_TRAIN = "plant_ds_train_cache.pickle"
-    FILENAME_VAL = "plant_ds_val_cache.pickle"
 
     def __init__(self, original_path, cfg):
         super().__init__()
 
         columns = ["classid", "image_path"]
         self.ds_root = get_full_path(original_path, cfg.dataset.path)
-        self.df = pd.read_csv(os.path.join(self.ds_root, cfg.dataset.csv), sep=",", usecols=columns)
+        self.df = pd.read_csv(os.path.join(self.ds_root, cfg.dataset.csv), sep=";", usecols=columns)
 
-        self.ds_root_val = get_full_path(original_path, cfg.dataset.path_val)
-        self.df_val = pd.read_csv(os.path.join(self.ds_root_val, cfg.dataset.csv_val), sep=",", usecols=columns)
+        self.all_classes = set(
+                                pd.DataFrame(self.df["classid"].value_counts().keys()).iloc[:, 0]
+                            )
 
-        self.transform_train = transforms.Compose([transforms.AutoAugment(AutoAugmentPolicy.IMAGENET),
-                                        transforms.Resize([cfg.resolution, cfg.resolution]),
-                                        transforms.ToTensor(),
-                                        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-                                        ])
-        self.transform_val = transforms.Compose([
-                                        transforms.AutoAugment(AutoAugmentPolicy.IMAGENET),
-                                        transforms.Resize([cfg.resolution_test, cfg.resolution_test]),
-                                        transforms.ToTensor(),
-                                        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-                                        ])
+        self.class_dict = {}
+        self.inv_class_dict = {}
+        for v, k in enumerate(self.all_classes):
+            self.class_dict[k] = v
+            self.inv_class_dict[v] = k
 
         self.batch_size = cfg.batch_size
         self.num_workers = cfg.num_workers
@@ -310,30 +300,156 @@ class PlantDataModule(LightningDataModule):
 
     @property
     def class_size(self):
-        return self.train_dataset.class_size
+        return len(self.class_dict)
        
     def setup(self, stage=None):
         path = os.path.join(self.original_path, self.FILENAME_TRAIN)
         if exists(path):
-            self.train_dataset = pickle.load(open(path, "rb"))
+            self.dataset = pickle.load(open(path, "rb"))
             print("Dataset cache loaded.")
         else:
-            self.train_dataset = LifeCLEFDataset(self.df, root=os.path.join(self.ds_root, self.cfg.dataset.images),
+            self.dataset = LifeCLEFDataset(self.df, root=os.path.join(self.ds_root, self.cfg.dataset.images),
                                     label_col=self.cfg.dataset.label_col, filename_col=self.cfg.dataset.filename_col,
-                                    transform=self.transform_train)
+                                    transform=self.transform_train, class_dict=self.class_dict, inv_class_dict=self.inv_class_dict)
             pickle.dump(self.train_dataset, open(path, "wb"))
 
+        self.train_dataset, self.val_dataset = self.dataset.split(train_perc = 0.8)
 
-        path = os.path.join(self.original_path, self.FILENAME_VAL)
+    def train_dataloader(self):
+
+        return DataLoader(
+            self.train_dataset,
+            batch_size=self.batch_size,
+            shuffle=True,
+            num_workers=self.num_workers,
+            pin_memory=True,
+            drop_last=True,
+            persistent_workers=True,
+        )
+
+    def val_dataloader(self):
+        return DataLoader(
+            self.val_dataset,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            pin_memory=True,
+            drop_last=True,
+            persistent_workers=True,
+        )
+
+
+class PlantAndFungiDataModule(LightningDataModule):
+
+    FILENAME_PLANT_TRAIN = "plant_ds_train_cache.pickle"
+    FILENAME_FUNGI_TRAIN = "fungi_ds_train_cache.pickle"
+    FILENAME_FUNGI_VAL = "fungi_ds_val_cache.pickle"
+
+    def __init__(self, original_path, cfg):
+        super().__init__()
+
+        fungi_columns = ["class_id", "image_path"]
+        self.fungi_ds_root = get_full_path(original_path, cfg.dataset.fungi_path)
+        self.fungi_df = pd.read_csv(os.path.join(self.fungi_ds_root, cfg.dataset.fungi_csv), sep=",", usecols=fungi_columns)
+        self.fungi_df["class_id"] = self.fungi_df["class_id"].apply(lambda x : f"F_{x}")
+
+        self.fungi_ds_root_val = get_full_path(original_path, cfg.dataset.fungi_path_val)
+        self.fungi_df_val = pd.read_csv(os.path.join(self.fungi_ds_root_val, cfg.dataset.fungi_csv_val), sep=",", usecols=fungi_columns)
+        self.fungi_df_val["class_id"] = self.fungi_df_val["class_id"].apply(lambda x : f"F_{x}")
+
+        plant_columns = ["classid", "image_path"]
+        self.plant_ds_root = get_full_path(original_path, cfg.dataset.plant_path)
+        self.plant_df = pd.read_csv(os.path.join(self.plant_ds_root, cfg.dataset.plant_csv), sep=";", usecols=plant_columns)
+        self.plant_df["classid"] = self.plant_df["classid"].apply(lambda x : f"P_{x}")
+
+        self.all_classes = set(
+                                pd.DataFrame(self.fungi_df["class_id"].value_counts().keys()).iloc[:, 0]
+                            ).union(
+                                set(pd.DataFrame(self.fungi_df_val["class_id"].value_counts().keys()).iloc[:, 0])
+                            ).union(
+                                set(pd.DataFrame(self.plant_df["classid"].value_counts().keys()).iloc[:, 0])
+                            )
+
+        self.class_dict = {}
+        self.inv_class_dict = {}
+        for v, k in enumerate(self.all_classes):
+            self.class_dict[k] = v
+            self.inv_class_dict[v] = k
+
+        #assign indexes of each type of data to calculate metrics
+        self.fungi_indexes = []
+        self.plant_indexes = []
+        for k, v in self.class_dict.items():
+            if "P" in k:
+                self.plant_indexes.append(v)
+            else:
+                self.fungi_indexes.append(v)
+        self.fungi_indexes = torch.LongTensor(self.fungi_indexes)
+        self.plant_indexes = torch.LongTensor(self.plant_indexes)
+        print(self.fungi_indexes.shape)
+        print(self.plant_indexes.shape)
+
+        self.transform_train = transforms.Compose([ #transforms.AutoAugment(AutoAugmentPolicy.IMAGENET),
+                                        transforms.Resize([cfg.resolution, cfg.resolution]),
+                                        transforms.ToTensor(),
+                                        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                                        ])
+        # self.transform_val = transforms.Compose([
+        #                                 transforms.AutoAugment(AutoAugmentPolicy.IMAGENET),
+        #                                 transforms.Resize([cfg.resolution_test, cfg.resolution_test]),
+        #                                 transforms.ToTensor(),
+        #                                 transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        #                                 ])
+
+        self.batch_size = cfg.batch_size
+        self.num_workers = cfg.num_workers
+        self.cfg = cfg
+        self.original_path = original_path
+
+    @property
+    def class_size(self):
+        return len(self.class_dict)
+
+    def setup(self, stage=None):
+        #FUNGI
+        path = os.path.join(self.original_path, self.FILENAME_FUNGI_TRAIN)
         if exists(path):
-            self.val_dataset = pickle.load(open(path, "rb"))
+            self.fungi_train_dataset = pickle.load(open(path, "rb"))
             print("Dataset cache loaded.")
         else:
-            self.val_dataset = LifeCLEFDataset(self.df_val, root=os.path.join(self.ds_root_val, self.cfg.dataset.images_val),
-                                   label_col=self.cfg.dataset.label_col, filename_col=self.cfg.dataset.filename_col,
-                                   transform=self.transform_val, class_dict=self.train_dataset.class_dict, inv_class_dict=self.train_dataset.inv_class_dict)
-            pickle.dump(self.val_dataset, open(path, "wb"))
+            self.fungi_train_dataset = LifeCLEFDataset(self.fungi_df, root=os.path.join(self.fungi_ds_root, self.cfg.dataset.fungi_images),
+                                    label_col=self.cfg.dataset.fungi_label_col, filename_col=self.cfg.dataset.fungi_filename_col,
+                                    transform=self.transform_train, class_dict=self.class_dict, inv_class_dict=self.inv_class_dict)
+            pickle.dump(self.fungi_train_dataset, open(path, "wb"))
 
+
+        path = os.path.join(self.original_path, self.FILENAME_FUNGI_VAL)
+        if exists(path):
+            self.fungi_val_dataset = pickle.load(open(path, "rb"))
+            print("Dataset cache loaded.")
+        else:
+            self.fungi_val_dataset = LifeCLEFDataset(self.fungi_df_val, root=os.path.join(self.fungi_ds_root_val, self.cfg.dataset.fungi_images_val),
+                                   label_col=self.cfg.dataset.fungi_label_col, filename_col=self.cfg.dataset.fungi_filename_col,
+                                   transform=self.transform_train, class_dict=self.class_dict, inv_class_dict=self.inv_class_dict)
+            pickle.dump(self.fungi_val_dataset, open(path, "wb"))
+
+        #PLANT
+        path = os.path.join(self.original_path, self.FILENAME_PLANT_TRAIN)
+        if exists(path):
+            self.plant_train_dataset = pickle.load(open(path, "rb"))
+            print("Dataset cache loaded.")
+        else:
+            self.plant_train_dataset = LifeCLEFDataset(self.plant_df, root=os.path.join(self.plant_ds_root, self.cfg.dataset.plant_images),
+                                    label_col=self.cfg.dataset.plant_label_col, filename_col=self.cfg.dataset.plant_filename_col,
+                                    transform=self.transform_train, class_dict=self.class_dict, inv_class_dict=self.inv_class_dict)
+            pickle.dump(self.plant_train_dataset, open(path, "wb"))
+
+        print(f"Total classes: {self.class_size}")
+
+        fungi_train_split1, fungi_train_split2 = self.fungi_train_dataset.split(train_perc = self.cfg.dataset.train_perc)
+        fungi_val_split1, fungi_val_split2 = self.fungi_val_dataset.split(train_perc = self.cfg.dataset.train_perc)
+        plant_train_split1, plant_train_split2 = self.plant_train_dataset.split(train_perc = self.cfg.dataset.train_perc)
+        self.train_dataset = torch.utils.data.ConcatDataset([fungi_train_split1, fungi_val_split1, plant_train_split1])
+        self.val_dataset = torch.utils.data.ConcatDataset([fungi_train_split2, fungi_val_split2, plant_train_split2])
 
     def train_dataloader(self):
         return DataLoader(
@@ -489,3 +605,11 @@ class PlantDataModule(LightningDataModule):
 #         return len(self.class_dict.keys())
 
     
+
+def get_dataset(original_path, cfg):
+    if cfg.dataset.name == "fungi":
+        return FungiDataModule(original_path, cfg=cfg)
+    elif cfg.dataset.name == "fungi_and_plant":
+        return PlantAndFungiDataModule(original_path, cfg=cfg)
+    else: #defaul plants
+        return PlantDataModule(original_path, cfg=cfg)

@@ -137,3 +137,5 @@ dmypy.json
 .idea*
 *.ckpt
 *.pickle
+config/.DS_Store
+config/dataset/.DS_Store

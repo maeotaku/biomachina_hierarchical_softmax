@@ -1,0 +1,21 @@
+name : fungi_and_plant
+
+fungi_path: "/home/maeotaku/Documents/dataset/fungiclef2023/train/"
+fungi_csv : "FungiCLEF2023_train_metadata_PRODUCTION.csv"
+fungi_images : "DF20"
+
+fungi_path_val: "/home/maeotaku/Documents/dataset/fungiclef2023/val/"
+fungi_csv_val : "FungiCLEF2023_val_metadata_PRODUCTION.csv"
+fungi_images_val : "DF21"
+
+fungi_label_col : "class_id"
+fungi_filename_col : "image_path"
+
+plant_path: "/home/maeotaku/Documents/dataset/trusted"
+plant_csv : "PlantCLEF2022_trusted_training_metadata.csv"
+plant_images : "images"
+
+plant_label_col : "classid"
+plant_filename_col : "image_path"
+
+train_perc : 0.90

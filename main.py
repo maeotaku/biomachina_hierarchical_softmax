@@ -9,22 +9,21 @@ import pandas as pd
 import pytorch_lightning as pl
 import torch
 import wandb
-from engines import SimCLREngine, SuprEngine
+from engines import SuprEngine, CombinedSuprEngine #SimCLREngine
 from models.factory import create_model
 from omegaconf import DictConfig, OmegaConf
 from our_datasets import (  # PlantCLEF2022Supr #PlatCLEFSimCLR, ObservationsDataset
-    FungiDataModule, get_full_path)
+    get_dataset, get_full_path)
 from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks import (EarlyStopping, LearningRateMonitor,
                                          StochasticWeightAveraging)
 from pytorch_lightning.loggers import WandbLogger
 from summary import *
-# from torchvision.transforms.autoaugment import AutoAugmentPolicy
-from tqdm import tqdm_notebook as tqdm
 
 warnings.filterwarnings("ignore")
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
+torch.set_float32_matmul_precision('high')
 
 CODE_ROOT = f'/home/maeotaku/Documents/code/biomachina/'
 
@@ -39,11 +38,12 @@ from hydra import (compose, initialize, initialize_config_dir,
 from omegaconf import OmegaConf
 
 
-def get_engine(cfg, name, model, class_dim, epochs):
+def get_engine(cfg, name, model, datamodule, class_dim, epochs):
     # if name == "simclr":
         # return SimCLREngine(model=model, loader=loader, loader_val=loader_val, cfg=cfg, epochs=epochs)
     # else:
-    return SuprEngine(model=model, cfg=cfg, epochs=epochs, class_dim=class_dim)
+    return CombinedSuprEngine(model=model, datamodule=datamodule, cfg=cfg, epochs=epochs)
+    # return SuprEngine(model=model, cfg=cfg, epochs=epochs, class_dim=class_dim)
 
 
 def get_model(cfg, original_path, num_classes):
@@ -70,15 +70,16 @@ def execute_training(cfg: DictConfig):
     exp_name = get_exp_name(cfg)
     original_path = CODE_ROOT
    
-    datamodule = FungiDataModule(original_path, cfg=cfg)
+    datamodule = get_dataset(original_path, cfg=cfg)
     datamodule.setup()
 
     model = get_model(cfg=cfg, original_path=original_path, num_classes=datamodule.class_size)
-    engine = get_engine(name=cfg.engine.name, cfg=cfg, model=model, class_dim=datamodule.class_size, epochs=cfg.epochs)
+
+    engine = get_engine(name=cfg.engine.name, cfg=cfg, model=model, datamodule=datamodule, class_dim=datamodule.class_size, epochs=cfg.epochs)
 
     from pytorch_lightning.callbacks import ModelCheckpoint
 
-    if cfg.wandb_id != "":
+    if cfg.wandb_id:
         wandb_logger = WandbLogger(name=exp_name, project=cfg.wandb_project, entity=cfg.wandb_entity, id=cfg.wandb_id, resume="allow")
     else:
         wandb_logger = WandbLogger(name=exp_name, project=cfg.wandb_project, entity=cfg.wandb_entity)
@@ -86,7 +87,7 @@ def execute_training(cfg: DictConfig):
     wandb.config.update(cfg, allow_val_change=True)
     
     engine_checkpoint_callback = ModelCheckpoint(
-        monitor="train_acc",
+        monitor="val_acc",
         dirpath=os.path.join(original_path, cfg.engine_checkpoints),
         save_top_k=1,
         mode="max",
