@@ -1,5 +1,5 @@
 name : web
-path: "C:\datasets\plantclef2022\web"
+path: "/mnt/media/datasets/plantclef2022/web"
 csv : "PlantCLEF2022_web_training_metadata.csv"
 images : "images"
 label_col : "species"

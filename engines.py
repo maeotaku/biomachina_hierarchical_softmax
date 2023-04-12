@@ -1,10 +1,13 @@
 import pytorch_lightning as pl
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 import torch_optimizer as optim
 import torchmetrics
 # from torchmetrics import MetricCollection, ReciprocalRank, Accuracy, Precision, Recall, MulticlassAccuracy, MulticlassF1Score
 import numpy as np
+import csv
+import os
 
 from torchmetrics import MetricCollection
 from torchmetrics.classification import Accuracy, F1Score
@@ -294,3 +297,43 @@ class CombinedSuprEngine(ExperimentEngine):
 
 
         return loss
+
+
+
+
+class TestEngine(pl.LightningModule):
+    def __init__(self, main_path, model, datamodule, cfg, class_dict, inv_class_dict):
+        super().__init__()
+        self.model = model
+        self.cfg = cfg
+        self.datamodule = datamodule
+        self.softmax = nn.Softmax(dim=1)
+        self.inv_class_dict = inv_class_dict
+        self.class_dict = class_dict
+        self.main_path = main_path
+
+    def forward(self, x):
+        return self.model(x)
+
+    def on_test_epoch_start(self):
+        self.probs_tensor = torch.zeros(0,dtype=torch.float, device="cpu")
+        self.obs_tensor = torch.zeros(0,dtype=torch.short, device="cpu")
+
+    def on_test_epoch_end(self):
+        with open(f'{os.path.join(self.main_path, self.cfg.last_engine_checkpoint.path)}.csv', 'w') as f:
+            writer = csv.writer(f, delimiter=';')
+            for ob in torch.unique(self.obs_tensor):
+                indices = (self.obs_tensor == ob).nonzero(as_tuple=True)[0]
+                probs = torch.index_select(self.probs_tensor, 0, indices)
+                probabilities, indices = torch.topk(torch.mean(probs, dim=0), 31)
+                for i in range(31):
+                    writer.writerow([ob.item(), self.inv_class_dict[indices[i].item()], "{:.10f}".format(probabilities[i].item()), i+1])
+
+    def test_step(self, batch, batch_idx):
+        x, obs = batch
+        logits = self.model(x, None)
+        preds = self.softmax(logits)
+        #x, obs = batch
+        #preds = self.model(x, None)
+        self.probs_tensor = torch.cat([self.probs_tensor, preds.cpu()])
+        self.obs_tensor = torch.cat([self.obs_tensor, obs.cpu()])

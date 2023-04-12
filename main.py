@@ -42,8 +42,8 @@ def get_engine(cfg, name, model, datamodule, class_dim, epochs):
     # if name == "simclr":
         # return SimCLREngine(model=model, loader=loader, loader_val=loader_val, cfg=cfg, epochs=epochs)
     # else:
-    return CombinedSuprEngine(model=model, datamodule=datamodule, cfg=cfg, epochs=epochs)
-    # return SuprEngine(model=model, cfg=cfg, epochs=epochs, class_dim=class_dim)
+    # return CombinedSuprEngine(model=model, datamodule=datamodule, cfg=cfg, epochs=epochs)
+    return SuprEngine(model=model, cfg=cfg, epochs=epochs, class_dim=class_dim)
 
 
 def get_model(cfg, original_path, num_classes):
@@ -96,7 +96,7 @@ def execute_training(cfg: DictConfig):
     )
 
     callbacks = [ engine_checkpoint_callback, LearningRateMonitor(logging_interval='step')] #StochasticWeightAveraging(swa_lrs=1e-2),
-    # callbacks.append(EarlyStopping(monitor="val_loss"))
+    callbacks.append(EarlyStopping(monitor="val_loss"))
 
     trainer = pl.Trainer(precision=cfg.precision, max_epochs=cfg.epochs, accelerator="gpu", devices=2, strategy="ddp", num_nodes=1,
                         # accumulate_grad_batches=10,

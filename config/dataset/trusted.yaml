@@ -1,6 +1,10 @@
 name : trusted
 path: "/home/maeotaku/Documents/dataset/trusted"
 csv : "PlantCLEF2022_trusted_training_metadata.csv"
+
+path_web : "/mnt/media/datasets/plantclef2022/web"
+csv_web : "PlantCLEF2022_web_training_metadata.csv"
+
 images : "images"
 label_col : "classid"
 filename_col : "image_path"

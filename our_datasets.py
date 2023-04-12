@@ -207,12 +207,6 @@ class FungiDataModule(LightningDataModule):
                                         transforms.ToTensor(),
                                         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
                                         ])
-        # self.transform_val = transforms.Compose([
-        #                                 # transforms.AutoAugment(AutoAugmentPolicy.IMAGENET),
-        #                                 transforms.Resize([cfg.resolution_test, cfg.resolution_test]),
-        #                                 transforms.ToTensor(),
-        #                                 transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        #                                 ])
 
         self.batch_size = cfg.batch_size
         self.num_workers = cfg.num_workers
@@ -277,27 +271,42 @@ class FungiDataModule(LightningDataModule):
             persistent_workers=True,
         )
 
+class SimpleTestDataset(torch.utils.data.Dataset):
+    def __init__(self, df, root : str, obs_col : str, filename_col : str, transform, loader=default_loader):
+        self.root = root
+        self.obs_col = obs_col
+        self.transform = transform
+        self.df = df
+        self.images = df[filename_col]
+        self.obsid = df[obs_col]
 
-class PlantDataModule(LightningDataModule):
+    def __len__(self):
+        return len(self.images)
+        
+    def __getitem__(self, index):
+        imagePath = os.path.join(self.root, self.images[index])
+        image = Image.open(imagePath).convert('RGB')
+        image = self.transform(image)
+        return image, self.obsid[index]
 
-    FILENAME_TRAIN = "plant_ds_train_cache.pickle"
 
-    def __init__(self, original_path, cfg):
+
+class PlantTestOnlyDataModule(LightningDataModule):
+    def __init__(self, original_path, cfg, class_dict, inv_class_dict):
         super().__init__()
 
-        columns = ["classid", "image_path"]
-        self.ds_root = get_full_path(original_path, cfg.dataset.path)
-        self.df = pd.read_csv(os.path.join(self.ds_root, cfg.dataset.csv), sep=";", usecols=columns)
+        columns = [cfg.test_dataset.filename_col, cfg.test_dataset.obs_col]
+        self.ds_root = get_full_path(original_path, cfg.test_dataset.path)
+        self.df = pd.read_csv(os.path.join(self.ds_root, cfg.test_dataset.csv), sep=";", usecols=columns)
 
-        self.all_classes = set(
-                                pd.DataFrame(self.df["classid"].value_counts().keys()).iloc[:, 0]
-                            )
+        self.class_dict = class_dict
+        self.inv_class_dict = inv_class_dict
 
-        self.class_dict = {}
-        self.inv_class_dict = {}
-        for v, k in enumerate(self.all_classes):
-            self.class_dict[k] = v
-            self.inv_class_dict[v] = k
+        self.transform = transforms.Compose([ 
+                                        transforms.Resize([cfg.resolution, cfg.resolution]),
+                                        transforms.ToTensor(),
+                                        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                                        ])
 
         self.batch_size = cfg.batch_size
         self.num_workers = cfg.num_workers
@@ -309,17 +318,95 @@ class PlantDataModule(LightningDataModule):
         return len(self.class_dict)
        
     def setup(self, stage=None):
-        path = os.path.join(self.original_path, self.FILENAME_TRAIN)
+        self.test_dataset = SimpleTestDataset(df=self.df, root=os.path.join(self.ds_root, self.cfg.test_dataset.images),
+                                   obs_col=self.cfg.test_dataset.obs_col, filename_col=self.cfg.test_dataset.filename_col,
+                                   transform=self.transform)
+   
+    def test_dataloader(self):
+        return DataLoader(
+            self.test_dataset,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            pin_memory=True,
+            drop_last=True,
+            persistent_workers=True,
+        )
+    
+
+
+
+class PlantDataModule(LightningDataModule):
+
+    FILENAME_TRUSTED = "plant_ds_trusted_cache.pickle"
+    FILENAME_WEB = "plant_ds_web_cache.pickle"
+
+
+    def __init__(self, original_path, cfg):
+        super().__init__()
+
+        columns = ["classid", "image_path"]
+        self.ds_root = get_full_path(original_path, cfg.dataset.path)
+        self.df = pd.read_csv(os.path.join(self.ds_root, cfg.dataset.csv), sep=";", usecols=columns)
+
+        self.ds_root_web = get_full_path(original_path, cfg.dataset.path_web)
+        self.df_web = pd.read_csv(os.path.join(self.ds_root_web, cfg.dataset.csv_web), sep=";", usecols=columns)
+
+        self.all_classes = set(pd.DataFrame(self.df["classid"].value_counts().keys()).iloc[:, 0]).union(set(pd.DataFrame(self.df_web["classid"].value_counts().keys()).iloc[:, 0]))
+
+        self.class_dict = {}
+        self.inv_class_dict = {}
+        for v, k in enumerate(self.all_classes):
+            self.class_dict[k] = v
+            self.inv_class_dict[v] = k
+
+        print(f"Total class ids {len(set(self.inv_class_dict.keys()))}")
+
+        self.transform_train = transforms.Compose([ #transforms.AutoAugment(AutoAugmentPolicy.IMAGENET),
+                                        transforms.Resize([cfg.resolution, cfg.resolution]),
+                                        transforms.ToTensor(),
+                                        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                                        ])
+
+        self.batch_size = cfg.batch_size
+        self.num_workers = cfg.num_workers
+        self.cfg = cfg
+        self.original_path = original_path
+
+    @property
+    def class_size(self):
+        return len(self.class_dict)
+       
+    def setup(self, stage=None):
+        path = os.path.join(self.original_path, self.FILENAME_WEB)
         if exists(path):
-            self.dataset = pickle.load(open(path, "rb"))
+            self.web_dataset = pickle.load(open(path, "rb"))
             print("Dataset cache loaded.")
         else:
-            self.dataset = LifeCLEFDataset(self.df, root=os.path.join(self.ds_root, self.cfg.dataset.images),
+            self.web_dataset = LifeCLEFDataset(self.df_web, root=os.path.join(self.ds_root_web, self.cfg.dataset.images),
+                                   label_col=self.cfg.dataset.label_col, filename_col=self.cfg.dataset.filename_col,
+                                   transform=self.transform_train, class_dict=self.class_dict, inv_class_dict=self.inv_class_dict)
+            pickle.dump(self.web_dataset, open(path, "wb"))
+
+        path = os.path.join(self.original_path, self.FILENAME_TRUSTED)
+        if exists(path):
+            self.trusted_dataset = pickle.load(open(path, "rb"))
+            print("Dataset cache loaded.")
+        else:
+            self.trusted_dataset = LifeCLEFDataset(self.df, root=os.path.join(self.ds_root, self.cfg.dataset.images),
                                     label_col=self.cfg.dataset.label_col, filename_col=self.cfg.dataset.filename_col,
                                     transform=self.transform_train, class_dict=self.class_dict, inv_class_dict=self.inv_class_dict)
-            pickle.dump(self.train_dataset, open(path, "wb"))
+            pickle.dump(self.trusted_dataset, open(path, "wb"))
 
-        self.train_dataset, self.val_dataset = self.dataset.split(train_perc = 0.8)
+        self.class_dict = self.trusted_dataset.class_dict
+        self.inv_class_dict = self.trusted_dataset.inv_class_dict
+
+        print(self.trusted_dataset)
+        print(self.web_dataset)
+
+        trusted_split1, trusted_split2 = self.trusted_dataset.split(train_perc = self.cfg.dataset.train_perc)
+        web_split1, web_split2 = self.web_dataset.split(train_perc = self.cfg.dataset.train_perc)
+        self.train_dataset = torch.utils.data.ConcatDataset([trusted_split1, web_split1])
+        self.val_dataset = torch.utils.data.ConcatDataset([trusted_split2, web_split2])
 
     def train_dataloader(self):
 

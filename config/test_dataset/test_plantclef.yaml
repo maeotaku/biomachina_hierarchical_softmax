@@ -1,0 +1,8 @@
+name : test_plantclef
+path: "/home/maeotaku/Documents/dataset/test_plantclef2023/"
+csv : "PlantCLEF2022_test_metadata.csv"
+
+images : "images"
+obs_col : "obsid"
+filename_col : "image_name"
+train_perc : 0.95

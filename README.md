@@ -13,6 +13,9 @@ checkpoints: weights of the models are stored in this folder.
 logs: tensorboard logging folder.
 output: Hydra's output folders for each experiment's logs.
 
+## Linux mount
+sudo fdisk -l
+sudo mount /dev/nvme0n1p3 /mnt/media/
 
 ## Running code in Kabre cluster.
 
