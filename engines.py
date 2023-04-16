@@ -341,7 +341,7 @@ class TestEngine(pl.LightningModule):
 class TestEngineFungi(TestEngine):
     def on_test_epoch_end(self):
         with open(f'{os.path.join(self.main_path, self.cfg.last_engine_checkpoint.path)}.csv', 'w') as f:
-            writer = csv.writer(f, delimiter=';')
+            writer = csv.writer(f, delimiter=',')
             writer.writerow(["observation_id", "class_id"])
             for ob in torch.unique(self.obs_tensor):
                 indices = (self.obs_tensor == ob).nonzero(as_tuple=True)[0]
