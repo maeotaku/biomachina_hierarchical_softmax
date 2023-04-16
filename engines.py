@@ -337,3 +337,14 @@ class TestEngine(pl.LightningModule):
         #preds = self.model(x, None)
         self.probs_tensor = torch.cat([self.probs_tensor, preds.cpu()])
         self.obs_tensor = torch.cat([self.obs_tensor, obs.cpu()])
+
+class TestEngineFungi(TestEngine):
+    def on_test_epoch_end(self):
+        with open(f'{os.path.join(self.main_path, self.cfg.last_engine_checkpoint.path)}.csv', 'w') as f:
+            writer = csv.writer(f, delimiter=';')
+            for ob in torch.unique(self.obs_tensor):
+                indices = (self.obs_tensor == ob).nonzero(as_tuple=True)[0]
+                probs = torch.index_select(self.probs_tensor, 0, indices)
+                idx = torch.argmax(torch.mean(probs, dim=0)).item()
+                #_, indices = torch.topk(torch.mean(probs, dim=0), 1)
+                writer.writerow([ob.item(), self.inv_class_dict[idx]])
